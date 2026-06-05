@@ -1660,19 +1660,384 @@ const DEFAULT_PLAYERS = [
 ];
 
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
+  try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; } catch{return null;}
+}
+function saveState(s) {
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch{}
 }
 
-function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+// ─── ROOM API HELPERS ─────────────────────────────────────────────────────────
+async function apiCreateRoom(gameState) {
+  const res = await fetch("/.netlify/functions/room", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ game_state: gameState })
+  });
+  if (!res.ok) throw new Error((await res.json()).error || "Failed to create room");
+  return (await res.json()).room;
+}
+
+async function apiFetchRoom(code) {
+  const res = await fetch(`/.netlify/functions/room?code=${code.toUpperCase()}`);
+  if (res.status===404) throw new Error("Room not found. Check the code and try again.");
+  if (!res.ok) throw new Error((await res.json()).error || "Failed to fetch room");
+  return (await res.json()).room;
+}
+
+async function apiUpdateRoom(code, gameState) {
+  const res = await fetch("/.netlify/functions/room", {
+    method:"PUT", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ code, game_state: gameState })
+  });
+  if (!res.ok) throw new Error("Failed to sync room");
+}
+
+// ─── LANDING SCREEN ───────────────────────────────────────────────────────────
+function LandingScreen({ onLocal, onCreateRoom, onJoinRoom }) {
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState("");
+  const [showJoin, setShowJoin] = useState(false);
+
+  const handleJoin = async () => {
+    if (joinCode.length < 4) { setError("Enter a 4-character room code"); return; }
+    setJoining(true); setError("");
+    try {
+      const room = await apiFetchRoom(joinCode.trim());
+      onJoinRoom(room);
+    } catch(e) {
+      setError(e.message);
+    } finally { setJoining(false); }
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0E0C0A",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",padding:"32px 20px",fontFamily:"'DM Sans','Segoe UI',sans-serif"}}>
+      {/* Logo */}
+      <div style={{marginBottom:32,textAlign:"center"}}>
+        <div style={{fontSize:64,marginBottom:8}}>🀄</div>
+        <div style={{fontSize:26,fontWeight:900,color:"#F0E8DC",letterSpacing:"-0.5px"}}>MahjongCompanion</div>
+        <div style={{fontSize:13,color:"rgba(200,180,160,0.4)",marginTop:4}}>Dubai Style · Taiwanese · HK · Riichi</div>
+      </div>
+
+      {/* Options */}
+      <div style={{width:"100%",maxWidth:380,display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* Continue local game */}
+        {loadState() && (
+          <button onClick={onLocal}
+            style={{width:"100%",padding:"16px 20px",background:"#1A1712",
+              border:"1px solid rgba(200,146,58,0.4)",borderRadius:14,cursor:"pointer",
+              display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+            <span style={{fontSize:28}}>📱</span>
+            <div>
+              <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>Continue Local Game</div>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Resume your saved game on this device</div>
+            </div>
+          </button>
+        )}
+
+        {/* New local game */}
+        <button onClick={onLocal}
+          style={{width:"100%",padding:"16px 20px",background:"#1A1712",
+            border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:14,cursor:"pointer",
+            display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+          <span style={{fontSize:28}}>🎲</span>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>{loadState()?"New Local Game":"Start Local Game"}</div>
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Play on this device only · Scores saved locally</div>
+          </div>
+        </button>
+
+        {/* Create shared room */}
+        <button onClick={onCreateRoom}
+          style={{width:"100%",padding:"16px 20px",background:"linear-gradient(135deg,#C8923A22,#F5C97A11)",
+            border:"1.5px solid #C8923A60",borderRadius:14,cursor:"pointer",
+            display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+          <span style={{fontSize:28}}>🔗</span>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:"#F5C97A"}}>Create Shared Room</div>
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Get a code to share with friends · Live scoreboard</div>
+          </div>
+        </button>
+
+        {/* Join room */}
+        {!showJoin ? (
+          <button onClick={()=>setShowJoin(true)}
+            style={{width:"100%",padding:"16px 20px",background:"linear-gradient(135deg,#4A7FA522,#88C0D011)",
+              border:"1.5px solid #4A7FA560",borderRadius:14,cursor:"pointer",
+              display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+            <span style={{fontSize:28}}>👁️</span>
+            <div>
+              <div style={{fontSize:15,fontWeight:700,color:"#88C0D0"}}>Join a Room</div>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Enter a room code to watch live · Read-only view</div>
+            </div>
+          </button>
+        ) : (
+          <div style={{background:"#1A1712",border:"1.5px solid #4A7FA560",borderRadius:14,padding:16}}>
+            <div style={{fontSize:13,fontWeight:600,color:"#88C0D0",marginBottom:10}}>Enter Room Code</div>
+            <input
+              value={joinCode}
+              onChange={e=>setJoinCode(e.target.value.toUpperCase().slice(0,4))}
+              onKeyDown={e=>e.key==="Enter"&&handleJoin()}
+              placeholder="e.g. MJ7X"
+              maxLength={4}
+              style={{width:"100%",padding:"12px 14px",background:"#0E0C0A",
+                border:`1.5px solid ${error?"#E05050":"rgba(255,255,255,0.15)"}`,
+                borderRadius:10,color:"#F0E8DC",fontSize:22,fontWeight:900,
+                letterSpacing:6,textAlign:"center",outline:"none",
+                fontFamily:"'DM Sans',sans-serif",marginBottom:8}}
+            />
+            {error&&<div style={{fontSize:12,color:"#E05050",marginBottom:8}}>{error}</div>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShowJoin(false);setJoinCode("");setError("");}}
+                style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",
+                  borderRadius:8,color:"rgba(200,180,160,0.5)",fontSize:13,cursor:"pointer"}}>Cancel</button>
+              <button onClick={handleJoin} disabled={joining}
+                style={{flex:2,padding:10,background:"#4A7FA5",border:"none",
+                  borderRadius:8,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",
+                  opacity:joining?0.6:1}}>
+                {joining?"Joining…":"Join Room →"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{marginTop:32,fontSize:11,color:"rgba(200,180,160,0.25)",textAlign:"center"}}>
+        Each device keeps its own local data · Rooms sync live via Supabase
+      </div>
+    </div>
+  );
+}
+
+// ─── GUEST VIEW ───────────────────────────────────────────────────────────────
+function GuestView({ room, onLeave }) {
+  const [gameState, setGameState] = useState(room.game_state || {});
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+
+  // Poll every 3 seconds (Supabase real-time would need client library)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const updated = await apiFetchRoom(room.code);
+        setGameState(updated.game_state || {});
+        setLastUpdate(new Date());
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [room.code]);
+
+  const players = gameState.players || [];
+  const round = gameState.round || 1;
+  const roundWind = gameState.roundWind || "E";
+  const roundHistory = gameState.roundHistory || [];
+  const sorted = [...players].sort((a,b)=>b.score-a.score);
+  const dealer = players.find(p=>p.windId==="E");
+  const rw = WINDS.find(w=>w.id===roundWind);
+  const gameColor = "#C8923A";
+  const gameAccent = "#F5C97A";
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0E0C0A",fontFamily:"'DM Sans','Segoe UI',sans-serif",
+      color:"#E8E0D5",maxWidth:480,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{padding:"14px 18px 12px",background:"#1A1410",
+        borderBottom:"0.5px solid rgba(200,146,58,0.2)",position:"sticky",top:0,zIndex:50}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontSize:11,color:gameColor,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>
+              👁️ Watching · Room {room.code}
+            </div>
+            <div style={{fontSize:16,fontWeight:700,color:"#F0E8DC",marginTop:2}}>Round {round}</div>
+          </div>
+          <button onClick={onLeave}
+            style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
+              color:"rgba(200,180,160,0.5)",fontSize:11,padding:"5px 12px",cursor:"pointer"}}>
+            Leave
+          </button>
+        </div>
+        {/* Live indicator */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:"#4CAF50",
+            animation:"pulse 2s ease-in-out infinite"}}/>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>
+            Live · updated {lastUpdate.toLocaleTimeString()}
+          </div>
+          {dealer&&<div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
+            borderRadius:10,padding:"1px 8px",fontWeight:600,marginLeft:"auto"}}>
+            🎴 {dealer.name} deals
+          </div>}
+        </div>
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+      </div>
+
+      <div style={{padding:"16px 16px 80px"}}>
+        {/* Round wind */}
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          <div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
+            border:`0.5px solid ${gameColor}40`,borderRadius:10,padding:"3px 10px",fontWeight:600}}>
+            {rw?.emoji} {rw?.label} Round
+          </div>
+        </div>
+
+        {/* Scoreboard */}
+        {sorted.map((p,i) => {
+          const wInfo = WINDS.find(w=>w.id===p.windId);
+          const isDealer = p.windId==="E";
+          return (
+            <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,
+              background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#1A1712",
+              border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid rgba(255,255,255,0.07)",
+              borderRadius:12,padding:"13px 16px",marginBottom:8}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:p.color,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:14,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
+                {i===0?"👑":i+1}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>{p.name}</span>
+                  <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
+                    padding:"1px 7px",borderRadius:8}}>
+                    {wInfo?.emoji} {wInfo?.label}
+                  </span>
+                  {isDealer&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",
+                    padding:"1px 6px",borderRadius:6,fontWeight:700}}>DEALER</span>}
+                </div>
+              </div>
+              <div style={{fontSize:26,fontWeight:900,
+                color:p.score>0?gameAccent:p.score<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                {p.score>0?"+":""}{p.score}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Recent rounds */}
+        {roundHistory.length>0&&(
+          <div style={{marginTop:20}}>
+            <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",letterSpacing:1.5,
+              textTransform:"uppercase",marginBottom:10}}>Recent Rounds</div>
+            {[...roundHistory].reverse().slice(0,5).map(r=>{
+              const winner = players.find(p=>p.id===r.winnerId);
+              return (
+                <div key={r.round} style={{background:"#131109",borderRadius:10,
+                  border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                    <span style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</span>
+                    {winner&&<span style={{fontSize:11,color:gameAccent,fontWeight:600}}>🏆 {winner.name}</span>}
+                  </div>
+                  <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                    {r.entries?.map(e=>(
+                      <span key={e.pid} style={{fontSize:13,
+                        color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                        {e.name}: {e.delta>0?"+":""}{e.delta}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {players.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(200,180,160,0.3)"}}>
+            <div style={{fontSize:40,marginBottom:12}}>⏳</div>
+            <div style={{fontSize:15}}>Waiting for host to start the game…</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function MahjongApp() {
+  const [appMode, setAppMode] = useState("landing"); // landing | local | host | guest
+  const [room, setRoom] = useState(null);
+  const [roomSyncing, setRoomSyncing] = useState(false);
+  const [roomError, setRoomError] = useState("");
+
+  // ── Landing screen ──
+  if (appMode === "landing") {
+    return (
+      <LandingScreen
+        onLocal={() => setAppMode("local")}
+        onCreateRoom={() => setAppMode("creating")}
+        onJoinRoom={(r) => { setRoom(r); setAppMode("guest"); }}
+      />
+    );
+  }
+
+  // ── Creating room ──
+  if (appMode === "creating") {
+    return <CreatingRoomScreen
+      onCreated={(r) => { setRoom(r); setAppMode("host"); }}
+      onCancel={() => setAppMode("landing")}
+    />;
+  }
+
+  // ── Guest view ──
+  if (appMode === "guest" && room) {
+    return <GuestView room={room} onLeave={() => { setRoom(null); setAppMode("landing"); }}/>;
+  }
+
+  // ── Host or local game ──
+  return <GameApp
+    isHost={appMode === "host"}
+    room={room}
+    onLeaveRoom={() => { setRoom(null); setAppMode("local"); }}
+  />;
+}
+
+// ─── CREATING ROOM SCREEN ─────────────────────────────────────────────────────
+function CreatingRoomScreen({ onCreated, onCancel }) {
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const create = async () => {
+      setCreating(true);
+      try {
+        const room = await apiCreateRoom({});
+        onCreated(room);
+      } catch(e) {
+        setError(e.message);
+        setCreating(false);
+      }
+    };
+    create();
+  }, []);
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0E0C0A",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",padding:32,
+      fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#E8E0D5"}}>
+      <div style={{fontSize:48,marginBottom:16}}>🔗</div>
+      {error ? (
+        <>
+          <div style={{fontSize:15,fontWeight:600,color:"#E05050",marginBottom:8}}>Failed to create room</div>
+          <div style={{fontSize:13,color:"rgba(200,180,160,0.5)",marginBottom:20,textAlign:"center",maxWidth:300}}>{error}</div>
+          <div style={{fontSize:12,color:"rgba(200,180,160,0.4)",marginBottom:20,textAlign:"center",maxWidth:320,lineHeight:1.6}}>
+            Make sure you've set up Supabase (see setup instructions) or use Local Game instead.
+          </div>
+          <button onClick={onCancel}
+            style={{padding:"10px 24px",background:"none",border:"0.5px solid rgba(255,255,255,0.2)",
+              borderRadius:10,color:"rgba(200,180,160,0.6)",fontSize:13,cursor:"pointer"}}>← Back</button>
+        </>
+      ) : (
+        <>
+          <div style={{fontSize:16,fontWeight:600,color:"#F0E8DC",marginBottom:8}}>Creating room…</div>
+          <div style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}>Connecting to Supabase</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── GAME APP (host or local) ─────────────────────────────────────────────────
+function GameApp({ isHost = false, room = null, onLeaveRoom }) {
   const saved = loadState();
 
   const [activeGame, setActiveGame] = useState(
@@ -1692,10 +2057,17 @@ export default function MahjongApp() {
   const [editingPlayer, setEditingPlayer] = useState(null); // player id being edited
   const [showSetup, setShowSetup] = useState(!saved); // show setup on first launch
 
-  // Persist whenever key state changes
+  // Persist locally
   useEffect(() => {
     saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory });
   }, [activeGame.id, players, round, roundWind, roundHistory]);
+
+  // Sync to room if host
+  useEffect(() => {
+    if (!isHost || !room) return;
+    const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id };
+    apiUpdateRoom(room.code, gameState).catch(()=>{});
+  }, [players, round, roundWind, roundHistory]);
 
   const game = activeGame;
   const isDXB = game.id === "dubai";
@@ -1875,9 +2247,28 @@ export default function MahjongApp() {
             <div style={{fontSize:11,color:game.color,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>🀄 MahjongCompanion</div>
             <div style={{fontSize:18,fontWeight:700,color:"#F0E8DC",marginTop:2}}>Round {round}</div>
           </div>
-          <button onClick={()=>setShowGamePicker(v=>!v)} style={{background:`${game.color}22`,border:`1px solid ${game.color}55`,borderRadius:20,padding:"6px 14px",color:game.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            {game.name} ▾
-          </button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {/* Room code badge — tap to share */}
+            {isHost && room && (
+              <button
+                onClick={()=>{
+                  if(navigator.share) {
+                    navigator.share({ title:"Join my Mahjong game", text:`Join my game with code: ${room.code}`, url:window.location.href });
+                  } else {
+                    navigator.clipboard?.writeText(room.code);
+                    alert(`Room code: ${room.code}\n\nShare this code with friends so they can join and watch the scoreboard live.`);
+                  }
+                }}
+                style={{background:`${game.color}20`,border:`1px solid ${game.color}50`,
+                  borderRadius:10,padding:"5px 10px",color:game.accent,
+                  fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:2}}>
+                🔗 {room.code}
+              </button>
+            )}
+            <button onClick={()=>setShowGamePicker(v=>!v)} style={{background:`${game.color}22`,border:`1px solid ${game.color}55`,borderRadius:20,padding:"6px 14px",color:game.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              {game.name} ▾
+            </button>
+          </div>
         </div>
         {showGamePicker&&(
           <div style={{position:"absolute",top:"100%",right:20,left:20,background:"#1C1814",border:"0.5px solid rgba(200,146,58,0.3)",borderRadius:12,zIndex:100,overflow:"hidden",marginTop:4}}>
