@@ -590,13 +590,14 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
       <div>
         <div style={{background:`${accentColor}18`,border:`1.5px solid ${accentColor}55`,borderRadius:16,padding:20,marginBottom:16}}>
           <div style={{fontSize:11,color:accentColor,letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>✓ Score calculated</div>
-          <div style={{fontSize:48,fontWeight:900,color:accent,lineHeight:1}}>{result.pts}</div>
-          <div style={{fontSize:13,color:"rgba(200,180,160,0.6)",marginTop:4}}>points total</div>
+          <div style={{fontSize:56,fontWeight:900,color:accent,lineHeight:1}}>{result.pts}</div>
+          <div style={{fontSize:14,color:"rgba(200,180,160,0.6)",marginTop:6}}>points total</div>
         </div>
+
         <div style={{background:"#1A1712",borderRadius:12,border:"0.5px solid rgba(255,255,255,0.08)",padding:14,marginBottom:16}}>
           <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>Breakdown</div>
           {result.breakdown.map((b,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"0.5px solid rgba(255,255,255,0.05)"}}>
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"0.5px solid rgba(255,255,255,0.05)"}}>
               <span style={{fontSize:13,color:"rgba(200,180,160,0.8)"}}>{b.label}</span>
               <span style={{fontSize:14,fontWeight:700,color:accent}}>+{b.pts}</span>
             </div>
@@ -606,9 +607,25 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
             <span style={{fontSize:22,fontWeight:900,color:accent}}>{result.pts} pts</span>
           </div>
         </div>
+
+        <div style={{fontSize:12,color:`${accentColor}99`,background:`${accentColor}10`,borderRadius:10,padding:"10px 14px",marginBottom:12,lineHeight:1.6}}>
+          Tap below to go to the Players tab where you can select who won and calculate payments automatically.
+        </div>
+
         <div style={{display:"flex",gap:10}}>
-          <button onClick={reset} style={{flex:1,padding:11,background:"none",border:`0.5px solid ${accentColor}50`,borderRadius:10,color:accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>New hand</button>
-          <button onClick={()=>onDone&&onDone(result.pts)} style={{flex:2,padding:11,background:accentColor,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>Add to scoreboard →</button>
+          <button onClick={reset}
+            style={{flex:1,padding:11,background:"none",border:`0.5px solid ${accentColor}50`,borderRadius:10,color:accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+            New hand
+          </button>
+          <button
+            onClick={()=>{
+              // Call onDone first so parent stores the score,
+              // then the setTimeout in parent handles navigation
+              if (onDone) onDone(result.pts);
+            }}
+            style={{flex:2,padding:11,background:accentColor,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+            Go to Players tab →
+          </button>
         </div>
       </div>
     );
@@ -703,8 +720,8 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
 // ─── AI VISION — calls secure Netlify proxy (API key never exposed to browser) ──
 
 async function analyseHandPhoto(base64Image) {
-  // Call our own Netlify function — it holds the API key server-side
-  const response = await fetch("/api/analyse", {
+  // Netlify functions are always at /.netlify/functions/<name>
+  const response = await fetch("/.netlify/functions/analyse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: base64Image }),
@@ -940,7 +957,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
         <div>
           <div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:12}}>
             <video ref={videoRef} autoPlay playsInline muted
-              style={{width:"100%",display:"block",borderRadius:14,background:"#000"}}
+              style={{width:"100%",height:"260px",objectFit:"cover",display:"block",borderRadius:14,background:"#000"}}
             />
             <div style={{position:"absolute",inset:0,border:`2px solid ${game.color}`,borderRadius:14,pointerEvents:"none"}}/>
             {/* Corner guides */}
@@ -1091,7 +1108,17 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
         accent={game.accent}
         prefilled={prefilledAnswers}
         aiResult={aiResult}
-        onDone={(score)=>{ onScore&&onScore(score); setMode("home"); setAiResult(null); setCapturedThumb(null); setPrefilledAnswers({}); }}
+        onDone={(score)=>{
+          // Pass score up to parent — parent sets pendingScore state
+          // Don't switch tabs here — let the score result screen show first
+          // then user taps "Go to Players" which navigates
+          if (onScore) onScore(score);
+          // Reset wizard state but stay on camera tab briefly
+          setMode("home");
+          setAiResult(null);
+          setCapturedThumb(null);
+          setPrefilledAnswers({});
+        }}
       />
       <button onClick={()=>setMode("home")}
         style={{marginTop:12,width:"100%",padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(200,180,160,0.5)",fontSize:12,cursor:"pointer"}}>
@@ -1411,10 +1438,13 @@ export default function MahjongApp() {
   };
 
   const handleWizardScore = (score) => {
-    // Store as object with pts + selection state
+    // Set pending score for payment flow — don't switch tab here
+    // (switching tab while wizard is mounted causes blank screen)
+    // Instead show a persistent banner — user taps Players tab themselves
     setPendingScore({ pts: score, _winnerId: null, _winType: null, _discarderId: null });
     setPendingPayment(null);
-    setTab("players");
+    // Small delay then switch — lets wizard's onDone finish unmounting cleanly
+    setTimeout(() => setTab("players"), 50);
   };
 
   return (
