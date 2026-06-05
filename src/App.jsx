@@ -1,60 +1,234 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── SVG TILE COMPONENT ───────────────────────────────────────────────────────
-const SUIT_COLORS = { man:"#C0392B", pin:"#1A6BB5", bam:"#1E8449", wind:"#5B4A9E", dragon:"#B7770D", flower:"#A93226", back:"#2C3E50" };
-const MAN_CHARS = ["一","二","三","四","五","六","七","八","九"];
-const WIND_MAP = { E:"東", S:"南", W:"西", N:"北" };
-const DRAGON_MAP = { G:"發", R:"中", W:"白" };
-const DRAGON_BG = { G:"#1E8449", R:"#C0392B", W:"#7F8C8D" };
-const WIND_BG = { E:"#5B4A9E", S:"#1A6BB5", W:"#6D4C41", N:"#2E7D32" };
+// ─── SVG TILE COMPONENT — Realistic mahjong tiles with English labels ──────────
+const SUIT_COLORS = {
+  man:"#C0392B", pin:"#1565C0", bam:"#1B5E20",
+  wind:"#4527A0", dragon:"#E65100", flower:"#AD1457", back:"#1A237E"
+};
 
-function PinPips({ n, col, w, h }) {
-  const layouts = {
-    1:[[.5,.5]],2:[[.5,.28],[.5,.72]],3:[[.5,.22],[.5,.5],[.5,.78]],
-    4:[[.28,.28],[.72,.28],[.28,.72],[.72,.72]],5:[[.28,.22],[.72,.22],[.5,.5],[.28,.78],[.72,.78]],
-    6:[[.28,.2],[.72,.2],[.28,.5],[.72,.5],[.28,.8],[.72,.8]],
-    7:[[.28,.18],[.72,.18],[.28,.47],[.72,.47],[.5,.33],[.28,.76],[.72,.76]],
-    8:[[.28,.16],[.72,.16],[.28,.42],[.72,.42],[.28,.68],[.72,.68],[.28,.88],[.72,.88]],
-    9:[[.25,.15],[.5,.15],[.75,.15],[.25,.42],[.5,.42],[.75,.42],[.25,.69],[.5,.69],[.75,.69]],
+// Dot pip positions for Circles suit (1–9)
+function DotPips({ n, col, w, h }) {
+  const cfg = {
+    1: [[.5,.5]],
+    2: [[.5,.27],[.5,.73]],
+    3: [[.5,.22],[.5,.5],[.5,.78]],
+    4: [[.28,.27],[.72,.27],[.28,.73],[.72,.73]],
+    5: [[.28,.22],[.72,.22],[.5,.5],[.28,.78],[.72,.78]],
+    6: [[.28,.2],[.72,.2],[.28,.5],[.72,.5],[.28,.8],[.72,.8]],
+    7: [[.28,.18],[.72,.18],[.28,.47],[.72,.47],[.5,.32],[.28,.76],[.72,.76]],
+    8: [[.28,.15],[.72,.15],[.28,.42],[.72,.42],[.28,.69],[.72,.69],[.28,.88],[.72,.88]],
+    9: [[.22,.15],[.5,.15],[.78,.15],[.22,.42],[.5,.42],[.78,.42],[.22,.69],[.5,.69],[.78,.69]],
   };
-  const pts = layouts[n]||[];
-  const r = n>=7?4:n>=5?4.5:5;
-  return <>{pts.map(([fx,fy],i)=><circle key={i} cx={fx*w} cy={fy*h} r={r} fill={col} opacity="0.9"/>)}</>;
+  const pts = cfg[n] || [];
+  const r = n >= 8 ? w*0.13 : n >= 6 ? w*0.14 : n >= 4 ? w*0.15 : w*0.17;
+  return <>
+    {pts.map(([fx,fy], i) => (
+      <g key={i}>
+        <circle cx={fx*w} cy={fy*h} r={r} fill={col}/>
+        <circle cx={fx*w-r*0.25} cy={fy*h-r*0.3} r={r*0.35} fill="rgba(255,255,255,0.3)"/>
+      </g>
+    ))}
+  </>;
 }
 
+// Bamboo stalk segments
 function BamStalks({ n, col, w, h }) {
-  const cols1 = n<=4?[.5]:n<=6?[.32,.68]:[.22,.5,.78];
-  const rows = n<=3?n:n<=6?Math.ceil(n/2):Math.ceil(n/3);
-  const items=[]; let placed=0;
-  for(let r=0;r<rows&&placed<n;r++){
-    const y=14+r*(h-20)/Math.max(rows-1,1);
-    for(let c=0;c<cols1.length&&placed<n;c++,placed++){
-      const x=cols1[c]*w;
-      items.push(<g key={placed}>
-        <rect x={x-3} y={y-7} width={6} height={12} rx="2" fill={col} opacity="0.85"/>
-        <rect x={x-2} y={y-1} width={4} height={2} rx="1" fill="#fff" opacity="0.35"/>
-        <rect x={x-3} y={y-7} width={6} height={3} rx="1.5" fill={col} opacity="0.5"/>
-      </g>);
+  const cols = n<=3?[.5]:n<=6?[.3,.7]:[.2,.5,.8];
+  const rows = Math.ceil(n/cols.length);
+  const items = []; let placed = 0;
+  for (let r = 0; r < rows && placed < n; r++) {
+    const y = (h * 0.12) + r * ((h * 0.78) / Math.max(rows - 1, 1));
+    for (let c = 0; c < cols.length && placed < n; c++, placed++) {
+      const x = cols[c] * w;
+      const sw = w * 0.16, sh = h * 0.18;
+      items.push(
+        <g key={placed}>
+          {/* Stalk body */}
+          <rect x={x-sw/2} y={y-sh/2} width={sw} height={sh} rx={sw*0.4} fill={col}/>
+          {/* Joint ring */}
+          <rect x={x-sw/2-1} y={y-1} width={sw+2} height={sh*0.22} rx={sw*0.3} fill="rgba(0,0,0,0.2)"/>
+          {/* Highlight */}
+          <rect x={x-sw/2+sw*0.15} y={y-sh/2+sh*0.1} width={sw*0.25} height={sh*0.5} rx={sw*0.15} fill="rgba(255,255,255,0.3)"/>
+        </g>
+      );
     }
   }
   return <>{items}</>;
 }
 
-function Tile({ suit, n, size=44 }) {
-  const W=size, H=Math.round(size*1.42), col=SUIT_COLORS[suit]||"#5B4A9E", pad=Math.max(2,size*0.06);
-  const face=<><rect x={1} y={1} width={W-2} height={H-2} rx={Math.max(3,size*0.09)} fill="#F7F0E0"/>
-    <rect x={1} y={1} width={W-2} height={H*0.18} rx={Math.max(3,size*0.09)} fill="rgba(255,255,255,0.45)"/>
-    <rect x={pad} y={pad} width={W-pad*2} height={H-pad*2} rx={Math.max(2,size*0.06)} fill="none" stroke={col} strokeWidth={size*0.025} opacity="0.25"/></>;
-  const border=<rect x={0.8} y={0.8} width={W-1.6} height={H-1.6} rx={Math.max(3,size*0.09)+0.5} fill="none" stroke={col} strokeWidth={size*0.045}/>;
-  const shadow={filter:"drop-shadow(0 2px 5px rgba(0,0,0,0.5))"};
-  if(suit==="pin") return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>{face}{border}<g transform={`translate(${pad},${pad})`}><PinPips n={n} col={col} w={W-pad*2} h={H-pad*2}/></g><text x={W*.5} y={H*.91} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize={Math.max(7,size*.18)} fontWeight="700" fontFamily="serif" opacity="0.45">{n}</text></svg>;
-  if(suit==="bam") return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>{face}{border}<g transform={`translate(${pad},${pad})`}><BamStalks n={n} col={col} w={W-pad*2} h={H-pad*2}/></g><text x={W*.5} y={H*.91} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize={Math.max(7,size*.18)} fontWeight="700" fontFamily="serif" opacity="0.45">{n}</text></svg>;
-  if(suit==="man") return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>{face}{border}<text x={W/2} y={H*.46} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize={size*.44} fontWeight="900" fontFamily="serif">{MAN_CHARS[(n||1)-1]}</text><text x={W/2} y={H*.82} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize={size*.22} fontWeight="700" fontFamily="serif" opacity="0.6">萬</text></svg>;
-  if(suit==="wind"){const bg=WIND_BG[n]||col;return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}><rect x={1} y={1} width={W-2} height={H-2} rx={Math.max(3,size*.09)} fill="#F7F0E0"/><rect x={W*.1} y={H*.12} width={W*.8} height={H*.76} rx={Math.max(2,size*.07)} fill={bg} opacity="0.12"/>{border}<text x={W/2} y={H*.5} textAnchor="middle" dominantBaseline="middle" fill={bg} fontSize={size*.48} fontWeight="900" fontFamily="serif">{WIND_MAP[n]||n}</text><text x={W/2} y={H*.84} textAnchor="middle" dominantBaseline="middle" fill={bg} fontSize={size*.18} fontWeight="600" fontFamily="serif" opacity="0.5">風</text></svg>;}
-  if(suit==="dragon"){const bg=DRAGON_BG[n]||col,isW=n==="W";return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}><rect x={1} y={1} width={W-2} height={H-2} rx={Math.max(3,size*.09)} fill="#F7F0E0"/><rect x={W*.08} y={H*.1} width={W*.84} height={H*.8} rx={Math.max(2,size*.07)} fill={bg} opacity={isW?.06:.13}/>{border}{isW?<><rect x={W*.2} y={H*.18} width={W*.6} height={H*.64} rx={size*.06} fill="none" stroke={bg} strokeWidth={size*.06}/><text x={W/2} y={H*.5} textAnchor="middle" dominantBaseline="middle" fill={bg} fontSize={size*.28} fontWeight="900" fontFamily="serif" opacity="0.7">白</text></>:<text x={W/2} y={H*.5} textAnchor="middle" dominantBaseline="middle" fill={bg} fontSize={size*.52} fontWeight="900" fontFamily="serif">{DRAGON_MAP[n]}</text>}</svg>;}
-  if(suit==="flower"){const emojis=["🌸","🌺","🌼","🌻","🍃","🌿","🎋","🌱"];const e=typeof n==="number"?emojis[(n-1)%8]:"🌸";return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}><rect x={1} y={1} width={W-2} height={H-2} rx={Math.max(3,size*.09)} fill="#F7F0E0"/><rect x={W*.08} y={H*.1} width={W*.84} height={H*.8} rx={size*.07} fill="#E91E63" opacity="0.07"/>{border}<text x={W/2} y={H*.48} textAnchor="middle" dominantBaseline="middle" fontSize={size*.42}>{e}</text><text x={W/2} y={H*.84} textAnchor="middle" dominantBaseline="middle" fill="#A93226" fontSize={size*.19} fontWeight="700" fontFamily="serif" opacity="0.55">花</text></svg>;}
-  return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}><rect x={1} y={1} width={W-2} height={H-2} rx={Math.max(3,size*.09)} fill="#1A2434"/><rect x={W*.08} y={H*.06} width={W*.84} height={H*.88} rx={size*.07} fill="none" stroke="#3D5A80" strokeWidth={size*.04}/><text x={W/2} y={H*.5} textAnchor="middle" dominantBaseline="middle" fill="#3D5A80" fontSize={size*.42} fontWeight="900" fontFamily="serif">?</text></svg>;
+function Tile({ suit, n, size = 44 }) {
+  const W = size, H = Math.round(size * 1.45);
+  const col = SUIT_COLORS[suit] || "#4527A0";
+  const shadow = { filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.55))" };
+
+  // ── Shared tile shell: ivory face with 3D bevel ──
+  const Shell = ({ children, bg = "#F2EAD3" }) => (
+    <>
+      {/* Outer border / bevel */}
+      <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#C8B89A"/>
+      {/* Light top/left bevel */}
+      <rect x={1} y={1} width={W-2} height={H*0.5} rx={size*0.09} fill="rgba(255,255,255,0.4)"/>
+      {/* Main face */}
+      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07} fill={bg}/>
+      {/* Subtle inner shadow */}
+      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07}
+        fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={size*0.03}/>
+      {children}
+    </>
+  );
+
+  // ── CIRCLES (Dots) ──
+  if (suit === "pin") {
+    const innerW = W * 0.82, innerH = H * 0.62;
+    const ix = W * 0.09, iy = H * 0.08;
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell>
+          <g transform={`translate(${ix},${iy})`}>
+            <DotPips n={n} col={col} w={innerW} h={innerH}/>
+          </g>
+          {/* Number + suit label */}
+          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
+            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
+            {n} DOT
+          </text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── BAMBOO ──
+  if (suit === "bam") {
+    const innerW = W * 0.82, innerH = H * 0.62;
+    const ix = W * 0.09, iy = H * 0.08;
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell>
+          <g transform={`translate(${ix},${iy})`}>
+            <BamStalks n={n} col={col} w={innerW} h={innerH}/>
+          </g>
+          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
+            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
+            {n} BAM
+          </text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── CHARACTERS ──
+  if (suit === "man") {
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell>
+          {/* Big number */}
+          <text x={W*0.5} y={H*0.44} textAnchor="middle" dominantBaseline="middle"
+            fill={col} fontSize={size*0.55} fontWeight="900" fontFamily="'Arial Black',Arial,sans-serif">{n}</text>
+          {/* "CHR" label */}
+          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
+            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
+            {n} CHR
+          </text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── WINDS ──
+  if (suit === "wind") {
+    const WBGS = { E:"#311B92", S:"#0D47A1", W:"#4E342E", N:"#1B5E20" };
+    const WLABELS = { E:"EAST", S:"SOUTH", W:"WEST", N:"NORTH" };
+    const WLETTERS = { E:"E", S:"S", W:"W", N:"N" };
+    const bg2 = WBGS[n] || "#311B92";
+    const letter = WLETTERS[n] || n;
+    const label = WLABELS[n] || n;
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell>
+          {/* Coloured background block */}
+          <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06} fill={bg2}/>
+          {/* Wind initial letter — large white */}
+          <text x={W*0.5} y={H*0.39} textAnchor="middle" dominantBaseline="middle"
+            fill="white" fontSize={size*0.46} fontWeight="900" fontFamily="'Arial Black',Arial,sans-serif">{letter}</text>
+          {/* "WIND" word */}
+          <text x={W*0.5} y={H*0.74} textAnchor="middle" dominantBaseline="middle"
+            fill={bg2} fontSize={size*0.15} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="1">WIND</text>
+          {/* Full direction name */}
+          <text x={W*0.5} y={H*0.88} textAnchor="middle" dominantBaseline="middle"
+            fill={bg2} fontSize={size*0.14} fontWeight="700" fontFamily="Arial,sans-serif" opacity="0.8">{label}</text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── DRAGONS ──
+  if (suit === "dragon") {
+    const DBGS = { G:"#1B5E20", R:"#B71C1C", W:"#546E7A" };
+    const DLABELS = { G:"GREEN", R:"RED", W:"WHITE" };
+    const DWORD = { G:"DRAGON", R:"DRAGON", W:"DRAGON" };
+    const bg2 = DBGS[n] || "#B71C1C";
+    const dlabel = DLABELS[n] || n;
+    const isWhite = n === "W";
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell>
+          {/* Colour block */}
+          <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06}
+            fill={bg2} opacity={isWhite ? 0.15 : 1}/>
+          {isWhite && <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06}
+            fill="none" stroke={bg2} strokeWidth={size*0.07}/>}
+          {/* Colour label e.g. "GREEN" */}
+          <text x={W*0.5} y={H*0.3} textAnchor="middle" dominantBaseline="middle"
+            fill={isWhite ? bg2 : "white"} fontSize={size*0.2} fontWeight="900"
+            fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">{dlabel}</text>
+          {/* "DRAGON" */}
+          <text x={W*0.5} y={H*0.49} textAnchor="middle" dominantBaseline="middle"
+            fill={isWhite ? bg2 : "white"} fontSize={size*0.16} fontWeight="800"
+            fontFamily="Arial,sans-serif" letterSpacing="0.5">DRAGON</text>
+          {/* Dragon emoji-style graphic */}
+          <text x={W*0.5} y={H*0.77} textAnchor="middle" dominantBaseline="middle"
+            fontSize={size*0.26}>🐉</text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── FLOWERS ──
+  if (suit === "flower") {
+    const emojis = ["🌸","🌺","🌼","🌻","🍀","🌿","🎋","🌱"];
+    const e = typeof n === "number" ? emojis[(n-1)%8] : "🌸";
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <Shell bg="#FFF8F0">
+          <text x={W*0.5} y={H*0.42} textAnchor="middle" dominantBaseline="middle"
+            fontSize={size*0.42}>{e}</text>
+          <text x={W*0.5} y={H*0.76} textAnchor="middle" dominantBaseline="middle"
+            fill="#AD1457" fontSize={size*0.16} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">FLOWER</text>
+          <text x={W*0.5} y={H*0.89} textAnchor="middle" dominantBaseline="middle"
+            fill="#AD1457" fontSize={size*0.13} fontFamily="Arial,sans-serif" opacity="0.7">#{typeof n==="number"?n:""}</text>
+        </Shell>
+      </svg>
+    );
+  }
+
+  // ── FACE DOWN ──
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+      <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#1A237E"/>
+      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07}
+        fill="none" stroke="#3949AB" strokeWidth={size*0.04}/>
+      {/* Diamond pattern */}
+      {[0.25,0.5,0.75].map(fy =>
+        [0.3,0.7].map(fx =>
+          <circle key={`${fx}${fy}`} cx={fx*W} cy={fy*H} r={size*0.06} fill="#3949AB" opacity="0.5"/>
+        )
+      )}
+      <text x={W*0.5} y={H*0.5} textAnchor="middle" dominantBaseline="middle"
+        fill="#5C6BC0" fontSize={size*0.35} fontWeight="900" fontFamily="Arial,sans-serif">?</text>
+    </svg>
+  );
 }
+
 
 function MeldGroup({ tiles, label, tileSize, accentColor }) {
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
@@ -644,17 +818,48 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
 
   const startCamera = async () => {
     setAnalysisError(null);
+    setCameraActive(false);
+
+    // iOS Safari requires explicit permission check and simple constraints
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setAnalysisError("Camera not supported on this browser. Please use Safari on iPhone.");
+      return;
+    }
+
     try {
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+
+      // Simple constraints work best on iOS Safari
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
       });
+
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraActive(true);
-    } catch {
-      alert("Camera access denied. Please allow camera permissions and try again.");
+      // srcObject assigned via useEffect once video element mounts
+    } catch (err) {
+      const msg = err.name === "NotAllowedError"
+        ? "Camera permission denied. Go to Settings → Safari → Camera and set to Allow."
+        : err.name === "NotFoundError"
+        ? "No camera found on this device."
+        : `Camera error: ${err.message}`;
+      setAnalysisError(msg);
     }
   };
+
+  // Assign stream to video element as soon as both are ready
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      // iOS Safari needs explicit play() call
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const stopCamera = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
@@ -782,7 +987,9 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
       {cameraActive && (
         <div>
           <div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:12}}>
-            <video ref={videoRef} autoPlay playsInline style={{width:"100%",display:"block",borderRadius:14}}/>
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{width:"100%",display:"block",borderRadius:14,background:"#000"}}
+            />
             <div style={{position:"absolute",inset:0,border:`2px solid ${game.color}`,borderRadius:14,pointerEvents:"none"}}/>
             {/* Corner guides */}
             {[[0,0],[1,0],[0,1],[1,1]].map(([x,y],i)=>(
