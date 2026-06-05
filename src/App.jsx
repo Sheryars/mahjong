@@ -1561,10 +1561,10 @@ export default function MahjongApp() {
             )}
 
             {/* ── PAYMENT FLOW — shown after wizard calculates score ── */}
-            {pendingScore !== null && pendingPayment === null && (
+            {pendingScore !== null && pendingPayment === null && typeof pendingScore === "object" && (
               <div style={{background:"#1A1712",borderRadius:14,border:`1.5px solid ${game.color}50`,padding:16,marginBottom:16}}>
                 <div style={{fontSize:13,fontWeight:700,color:game.accent,marginBottom:4}}>
-                  🀄 Score calculated: <span style={{fontSize:22,fontWeight:900}}>{pendingScore}</span> pts
+                  🀄 Score: <span style={{fontSize:22,fontWeight:900}}>{pendingScore?.pts ?? pendingScore}</span> pts
                 </div>
                 <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginBottom:14}}>Select winner and how they won to calculate payments</div>
 
@@ -1641,13 +1641,14 @@ export default function MahjongApp() {
                   (pendingScore._winType==="self_pick" || pendingScore._discarderId) && (
                   <button
                     onClick={()=>{
+                      const pts = Number(pendingScore?.pts ?? pendingScore);
                       const payments = calcPayments(
-                        pendingScore.pts,
+                        pts,
                         pendingScore._winnerId,
                         pendingScore._winType,
                         pendingScore._discarderId
                       );
-                      setPendingPayment({ score: pendingScore.pts, payments, winnerId: pendingScore._winnerId });
+                      setPendingPayment({ score: pts, payments, winnerId: pendingScore._winnerId });
                     }}
                     style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                     Calculate payments →
@@ -1775,8 +1776,8 @@ export default function MahjongApp() {
                   <button
                     onClick={()=>{
                       const pts = Number(scoreInputs[p.id]||0);
-                      if(pts<=0){alert("Enter a score first");return;}
-                      setPendingScore({pts, _winnerId:p.id, _winType:null, _discarderId:null});
+                      if(pts<=0){ alert("Enter a score first"); return; }
+                      setPendingScore({ pts, _winnerId: p.id, _winType: null, _discarderId: null });
                       setPendingPayment(null);
                       setScoreInputs({});
                     }}
