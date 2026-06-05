@@ -1110,14 +1110,33 @@ async function analyseHandPhoto(base64Image) {
   return await response.json();
 }
 
-// Convert video frame to base64 JPEG via canvas
+// Convert video frame to base64 JPEG — crops to match the 220px preview window
 function captureFrameAsBase64(videoEl) {
   const canvas = document.createElement("canvas");
-  canvas.width = videoEl.videoWidth || 640;
-  canvas.height = videoEl.videoHeight || 480;
-  canvas.getContext("2d").drawImage(videoEl, 0, 0);
-  // Strip the data:image/jpeg;base64, prefix
-  return canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+  const vw = videoEl.videoWidth  || 640;
+  const vh = videoEl.videoHeight || 480;
+
+  // The video is displayed at full width with height:220px objectFit:cover
+  // We need to crop the same region that's visible in the preview
+  const displayW = videoEl.offsetWidth  || 375;
+  const displayH = 220; // matches CSS height
+
+  // Calculate the cropped source region (same math as CSS objectFit:cover)
+  const scale = Math.max(displayW / vw, displayH / vh);
+  const srcW = displayW / scale;
+  const srcH = displayH / scale;
+  const srcX = (vw - srcW) / 2;
+  const srcY = (vh - srcH) / 2;
+
+  // Output at 2× display size for quality
+  canvas.width  = displayW * 2;
+  canvas.height = displayH * 2;
+  canvas.getContext("2d").drawImage(
+    videoEl,
+    srcX, srcY, srcW, srcH,       // source crop
+    0, 0, canvas.width, canvas.height  // dest
+  );
+  return canvas.toDataURL("image/jpeg", 0.88).split(",")[1];
 }
 
 // ─── DUBAI SCORING CAMERA TAB ─────────────────────────────────────────────────
@@ -1363,8 +1382,10 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
   if (mode === "analysing") return (
     <div style={{textAlign:"center",padding:"32px 16px"}}>
       {capturedThumb && (
-        <div style={{marginBottom:20,borderRadius:12,overflow:"hidden",border:`1px solid ${game.color}40`}}>
-          <img src={capturedThumb} alt="captured hand" style={{width:"100%",display:"block",borderRadius:12,opacity:0.7}}/>
+        <div style={{marginBottom:20,borderRadius:12,overflow:"hidden",
+          border:`1px solid ${game.color}40`,height:220}}>
+          <img src={capturedThumb} alt="captured hand"
+            style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:0.7}}/>
         </div>
       )}
       <div style={{fontSize:32,marginBottom:12}}>🀄</div>
@@ -1389,77 +1410,145 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
     </div>
   );
 
-  // ── REVIEW AI RESULT ──
+    // ── REVIEW AI RESULT ──
   if (mode === "review" && aiResult) {
     const confColor = aiResult.confidence==="high"?"#8FBC8F":aiResult.confidence==="medium"?game.accent:"#E05050";
-    const confLabel = aiResult.confidence==="high"?"High confidence":aiResult.confidence==="medium"?"Medium confidence":"Low confidence — review answers carefully";
+    const confLabel = aiResult.confidence==="high"?"High confidence":aiResult.confidence==="medium"?"Medium — review answers":"Low confidence — check carefully";
+    const tilesOk = aiResult.tiles_visible !== false;
+
     return (
       <div>
-        {/* Thumbnail */}
+        {/* Thumbnail — cropped to same 220px height as preview */}
         {capturedThumb && (
-          <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${game.color}40`,marginBottom:14}}>
-            <img src={capturedThumb} alt="captured hand" style={{width:"100%",display:"block",borderRadius:12}}/>
+          <div style={{borderRadius:12,overflow:"hidden",
+            border:`1px solid ${game.color}40`,marginBottom:14,height:220}}>
+            <img src={capturedThumb} alt="captured hand"
+              style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
           </div>
         )}
 
-        {/* AI Summary */}
-        <div style={{background:"#1A1712",borderRadius:12,border:`1px solid ${game.color}40`,padding:14,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>🤖 AI Analysis</div>
-            <div style={{fontSize:11,fontWeight:700,color:confColor,background:`${confColor}18`,padding:"2px 8px",borderRadius:10}}>{confLabel}</div>
-          </div>
-          <div style={{fontSize:13,color:"rgba(200,180,160,0.7)",lineHeight:1.6,marginBottom:12}}>{aiResult.ai_notes}</div>
-
-          {/* Detected summary chips */}
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {aiResult.flower_count>0&&<Chip label={`🌸 ${aiResult.flower_count} flower${aiResult.flower_count>1?"s":""}`} color={game.color}/>}
-            {aiResult.flower_count===0&&<Chip label="No flowers" color="#5A8A6A"/>}
-            {aiResult.suit_type&&<Chip label={{"pure":"Pure Suit","semi_pure":"Semi Pure","two_suit":"2 Suits","two_suit_clean":"2 Suits Clean","all_five":"All 5 Suits","mixed":"Mixed"}[aiResult.suit_type]||aiResult.suit_type} color={game.color}/>}
-            {aiResult.hand_type&&<Chip label={{"all_sheung":"All Sheung","all_pong":"All Pong","special":"Special Hand","mixed":"Mixed"}[aiResult.hand_type]||aiResult.hand_type} color={game.color}/>}
-            {aiResult.pong_dragon>0&&<Chip label={`${aiResult.pong_dragon} Dragon Pong`} color="#C8923A"/>}
-            {aiResult.pong_wind>0&&<Chip label={`${aiResult.pong_wind} Wind Pong`} color="#5B4A9E"/>}
-            {aiResult.good_eye&&<Chip label="Good Eye (2/5/8)" color="#8FBC8F"/>}
-            {aiResult.special_hand&&aiResult.special_hand!=="none"&&<Chip label={aiResult.special_hand.toUpperCase()} color="#E05050"/>}
-            {aiResult.dragon_run&&aiResult.dragon_run!=="none"&&<Chip label="Dragon Run" color="#C8923A"/>}
-          </div>
-        </div>
-
-        <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginBottom:8,lineHeight:1.6}}>
-          The scoring wizard has been pre-filled based on the AI analysis. Review and adjust any answers as needed.
-        </div>
-
-        {/* Winner picker — feeds wind seat into wizard */}
-        {players.length > 0 && (
-          <div style={{background:"#1A1712",borderRadius:10,border:"0.5px solid rgba(255,255,255,0.08)",padding:12,marginBottom:12}}>
-            <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Who won? (sets seat wind automatically)</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {players.map(p=>{
-                const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
-                const isSelected = selectedWinner===p.id;
-                return (
-                  <button key={p.id} onClick={()=>setSelectedWinner(p.id)}
-                    style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${isSelected?p.color:"rgba(255,255,255,0.1)"}`,
-                      background:isSelected?`${p.color}25`:"transparent",cursor:"pointer",
-                      display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{fontSize:13}}>{WINDS_MAP[p.windId]||"🀀"}</span>
-                    <span style={{fontSize:12,fontWeight:isSelected?700:500,color:isSelected?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
-                  </button>
-                );
-              })}
+        {/* ── NOT ENOUGH TILES warning ── */}
+        {tilesOk && aiResult.tile_count !== undefined && aiResult.tile_count < 17 && (
+          <div style={{background:"rgba(220,80,80,0.12)",border:"1px solid rgba(220,80,80,0.4)",
+            borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#E05050",marginBottom:6}}>
+              ⚠️ Only {aiResult.tile_count} tiles detected — need 17
+            </div>
+            <div style={{fontSize:13,color:"rgba(220,160,160,0.85)",lineHeight:1.6,marginBottom:6}}>
+              This would be a <strong style={{color:"#E05050"}}>False Mahjong</strong> — a valid winning hand requires exactly 17 tiles (16 hand tiles + winning tile, plus any flower tiles).
+            </div>
+            <div style={{fontSize:12,color:"rgba(200,160,160,0.65)",lineHeight:1.7,marginBottom:12}}>
+              Make sure all tiles are visible in the photo, including:
+              {"\n"}• The winning tile (placed horizontally)
+              {"\n"}• All flower tiles (placed to the side)
+              {"\n"}• No tiles are hidden behind others
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); setCapturedThumb(null); setAiResult(null); }}
+                style={{flex:1,padding:10,background:game.color,border:"none",borderRadius:8,
+                  color:"#0E0C0A",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                📷 Retake photo
+              </button>
+              <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setMode("wizard"); }}
+                style={{flex:1,padding:10,background:"none",border:`0.5px solid ${game.color}50`,
+                  borderRadius:8,color:game.accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Score manually
+              </button>
             </div>
           </div>
         )}
 
-        <div style={{display:"flex",gap:10,marginBottom:12}}>
-          <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); setCapturedThumb(null); setAiResult(null); }}
-            style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:10,color:"rgba(200,180,160,0.5)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            Retake photo
-          </button>
-          <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill(prefilledAnswers, selectedWinner)); setMode("wizard"); }}
-            style={{flex:2,padding:10,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-            Continue to scoring →
-          </button>
-        </div>
+        {/* Tiles not visible warning */}
+        {!tilesOk && (
+          <div style={{background:"rgba(220,80,80,0.12)",border:"1px solid rgba(220,80,80,0.4)",
+            borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#E05050",marginBottom:4}}>⚠️ Tiles not clearly visible</div>
+            <div style={{fontSize:12,color:"rgba(220,160,160,0.8)",lineHeight:1.6,marginBottom:10}}>
+              The photo didn't show enough tiles to analyse. Try again with:
+            </div>
+            <div style={{fontSize:12,color:"rgba(220,160,160,0.7)",lineHeight:1.8}}>
+              • All 17 tiles laid flat and face-up{"\n"}
+              • Good lighting, no shadows{"\n"}
+              • Camera closer to the tiles{"\n"}
+              • Avoid glare on the tile surface
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:12}}>
+              <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); setCapturedThumb(null); setAiResult(null); }}
+                style={{flex:1,padding:10,background:game.color,border:"none",borderRadius:8,
+                  color:"#0E0C0A",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                📷 Retake photo
+              </button>
+              <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setMode("wizard"); }}
+                style={{flex:1,padding:10,background:"none",border:`0.5px solid ${game.color}50`,borderRadius:8,
+                  color:game.accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Score manually
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* AI summary — only if tiles visible AND count is valid */}
+        {tilesOk && (aiResult.tile_count === undefined || aiResult.tile_count >= 17) && (
+          <div>
+            <div style={{background:"#1A1712",borderRadius:12,border:`1px solid ${game.color}40`,padding:14,marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>🤖 AI Analysis</div>
+                <div style={{fontSize:11,fontWeight:700,color:confColor,background:`${confColor}18`,padding:"2px 8px",borderRadius:10}}>{confLabel}</div>
+              </div>
+              <div style={{fontSize:13,color:"rgba(200,180,160,0.7)",lineHeight:1.6,marginBottom:12}}>{aiResult.ai_notes}</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {aiResult.flower_count>0&&<Chip label={`🌸 ${aiResult.flower_count} flower${aiResult.flower_count>1?"s":""}`} color={game.color}/>}
+                {aiResult.flower_count===0&&<Chip label="No flowers" color="#5A8A6A"/>}
+                {aiResult.suit_type&&<Chip label={{"pure":"Pure Suit","semi_pure":"Semi Pure","two_suit":"2 Suits","two_suit_clean":"2 Suits Clean","all_five":"All 5 Suits","mixed":"Mixed"}[aiResult.suit_type]||aiResult.suit_type} color={game.color}/>}
+                {aiResult.hand_type&&<Chip label={{"all_sheung":"All Sheung","all_pong":"All Pong","special":"Special Hand","mixed":"Mixed"}[aiResult.hand_type]||aiResult.hand_type} color={game.color}/>}
+                {aiResult.pong_dragon>0&&<Chip label={`${aiResult.pong_dragon} Dragon Pong`} color="#C8923A"/>}
+                {aiResult.pong_wind>0&&<Chip label={`${aiResult.pong_wind} Wind Pong`} color="#5B4A9E"/>}
+                {aiResult.good_eye&&<Chip label="Good Eye (2/5/8)" color="#8FBC8F"/>}
+                {aiResult.special_hand&&aiResult.special_hand!=="none"&&<Chip label={aiResult.special_hand.toUpperCase()} color="#E05050"/>}
+                {aiResult.dragon_run&&aiResult.dragon_run!=="none"&&<Chip label="Dragon Run" color="#C8923A"/>}
+              </div>
+            </div>
+
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginBottom:12,lineHeight:1.6}}>
+              Pre-filled from photo. Review and adjust any answers in the wizard.
+            </div>
+
+            {/* Winner picker */}
+            {players.length > 0 && (
+              <div style={{background:"#1A1712",borderRadius:10,border:"0.5px solid rgba(255,255,255,0.08)",padding:12,marginBottom:12}}>
+                <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Who won?</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {players.map(p=>{
+                    const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+                    const isSelected = selectedWinner===p.id;
+                    return (
+                      <button key={p.id} onClick={()=>setSelectedWinner(p.id)}
+                        style={{padding:"6px 12px",borderRadius:20,
+                          border:`1.5px solid ${isSelected?p.color:"rgba(255,255,255,0.1)"}`,
+                          background:isSelected?`${p.color}25`:"transparent",
+                          cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:13}}>{WINDS_MAP[p.windId]||"🀀"}</span>
+                        <span style={{fontSize:12,fontWeight:isSelected?700:500,
+                          color:isSelected?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:10,marginBottom:12}}>
+              <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); setCapturedThumb(null); setAiResult(null); }}
+                style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:10,color:"rgba(200,180,160,0.5)",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                Retake
+              </button>
+              <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill(prefilledAnswers, selectedWinner)); setMode("wizard"); }}
+                style={{flex:2,padding:10,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                Continue to scoring →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1814,8 +1903,15 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
 function GuestView({ room, onLeave }) {
   const [gameState, setGameState] = useState(room.game_state || {});
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [tab, setTab] = useState("players");
+  const [handFilter, setHandFilter] = useState("all");
+  const [expandedHand, setExpandedHand] = useState(null);
 
-  // Poll every 3 seconds (Supabase real-time would need client library)
+  const game = GAMES[0]; // Dubai by default; could read from gameState.gameId
+  const gameColor = game.color;
+  const gameAccent = game.accent;
+
+  // Poll every 3 seconds for live updates
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -1831,24 +1927,34 @@ function GuestView({ room, onLeave }) {
   const round = gameState.round || 1;
   const roundWind = gameState.roundWind || "E";
   const roundHistory = gameState.roundHistory || [];
-  const sorted = [...players].sort((a,b)=>b.score-a.score);
-  const dealer = players.find(p=>p.windId==="E");
-  const rw = WINDS.find(w=>w.id===roundWind);
-  const gameColor = "#C8923A";
-  const gameAccent = "#F5C97A";
+  const sorted = [...players].sort((a,b) => b.score - a.score);
+  const dealer = players.find(p => p.windId === "E");
+  const rw = WINDS.find(w => w.id === roundWind);
+
+  // Hands + cats for Dubai
+  const allHands = GAME_HANDS[game.id] || [];
+  const cats = GAME_CATS[game.id] || [{id:"all",label:"All"}];
+  const filteredHands = allHands.filter(h => handFilter==="all" || h.cat===handFilter);
+
+  const tabs = [
+    {id:"players", label:"Scores",  icon:"📊"},
+    {id:"hands",   label:"Hands",   icon:"📖"},
+    {id:"ref",     label:"Rules",   icon:"📋"},
+  ];
 
   return (
     <div style={{minHeight:"100vh",background:"#0E0C0A",fontFamily:"'DM Sans','Segoe UI',sans-serif",
       color:"#E8E0D5",maxWidth:480,margin:"0 auto"}}>
+
       {/* Header */}
-      <div style={{padding:"14px 18px 12px",background:"#1A1410",
+      <div style={{padding:"14px 18px 10px",background:"#1A1410",
         borderBottom:"0.5px solid rgba(200,146,58,0.2)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div>
             <div style={{fontSize:11,color:gameColor,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>
-              👁️ Watching · Room {room.code}
+              👁️ Room {room.code} · Read only
             </div>
-            <div style={{fontSize:16,fontWeight:700,color:"#F0E8DC",marginTop:2}}>Round {round}</div>
+            <div style={{fontSize:16,fontWeight:700,color:"#F0E8DC",marginTop:1}}>Round {round}</div>
           </div>
           <button onClick={onLeave}
             style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
@@ -1856,97 +1962,212 @@ function GuestView({ room, onLeave }) {
             Leave
           </button>
         </div>
-        {/* Live indicator */}
-        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}>
-          <div style={{width:7,height:7,borderRadius:"50%",background:"#4CAF50",
-            animation:"pulse 2s ease-in-out infinite"}}/>
-          <div style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>
-            Live · updated {lastUpdate.toLocaleTimeString()}
+        {/* Live pulse + dealer */}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:"#4CAF50",
+              animation:"gpulse 2s ease-in-out infinite"}}/>
+            <div style={{fontSize:10,color:"rgba(200,180,160,0.4)"}}>
+              {lastUpdate.toLocaleTimeString()}
+            </div>
           </div>
-          {dealer&&<div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
+          {rw&&<div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
+            borderRadius:10,padding:"1px 8px",fontWeight:600}}>
+            {rw.emoji} {rw.label} Round
+          </div>}
+          {dealer&&<div style={{fontSize:11,color:"#F5C97A",background:"rgba(245,201,122,0.12)",
             borderRadius:10,padding:"1px 8px",fontWeight:600,marginLeft:"auto"}}>
             🎴 {dealer.name} deals
           </div>}
         </div>
-        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+        <style>{`@keyframes gpulse{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{display:"flex",background:"#121008",borderBottom:"0.5px solid rgba(255,255,255,0.07)",
+        position:"sticky",top:82,zIndex:40}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{flex:1,padding:"10px 4px 9px",background:"none",border:"none",
+              borderBottom:tab===t.id?`2px solid ${gameColor}`:"2px solid transparent",
+              color:tab===t.id?gameAccent:"rgba(200,180,160,0.4)",
+              fontSize:10,fontWeight:600,letterSpacing:0.5,cursor:"pointer",
+              display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <span style={{fontSize:16}}>{t.icon}</span>{t.label.toUpperCase()}
+          </button>
+        ))}
       </div>
 
       <div style={{padding:"16px 16px 80px"}}>
-        {/* Round wind */}
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
-            border:`0.5px solid ${gameColor}40`,borderRadius:10,padding:"3px 10px",fontWeight:600}}>
-            {rw?.emoji} {rw?.label} Round
-          </div>
-        </div>
 
-        {/* Scoreboard */}
-        {sorted.map((p,i) => {
-          const wInfo = WINDS.find(w=>w.id===p.windId);
-          const isDealer = p.windId==="E";
-          return (
-            <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,
-              background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#1A1712",
-              border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid rgba(255,255,255,0.07)",
-              borderRadius:12,padding:"13px 16px",marginBottom:8}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:p.color,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:14,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
-                {i===0?"👑":i+1}
-              </div>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>{p.name}</span>
-                  <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
-                    padding:"1px 7px",borderRadius:8}}>
-                    {wInfo?.emoji} {wInfo?.label}
-                  </span>
-                  {isDealer&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",
-                    padding:"1px 6px",borderRadius:6,fontWeight:700}}>DEALER</span>}
-                </div>
-              </div>
-              <div style={{fontSize:26,fontWeight:900,
-                color:p.score>0?gameAccent:p.score<0?"#E05050":"rgba(200,180,160,0.4)"}}>
-                {p.score>0?"+":""}{p.score}
+        {/* ── SCORES TAB ── */}
+        {tab==="players" && (
+          <div>
+            {/* Read-only banner */}
+            <div style={{background:"rgba(74,127,165,0.12)",border:"0.5px solid rgba(74,127,165,0.3)",
+              borderRadius:10,padding:"8px 14px",marginBottom:14,
+              display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>👁️</span>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.55)"}}>
+                You are watching this game. Only the host can enter scores.
               </div>
             </div>
-          );
-        })}
 
-        {/* Recent rounds */}
-        {roundHistory.length>0&&(
-          <div style={{marginTop:20}}>
-            <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",letterSpacing:1.5,
-              textTransform:"uppercase",marginBottom:10}}>Recent Rounds</div>
-            {[...roundHistory].reverse().slice(0,5).map(r=>{
-              const winner = players.find(p=>p.id===r.winnerId);
+            {/* Scoreboard */}
+            {sorted.length === 0 ? (
+              <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(200,180,160,0.3)"}}>
+                <div style={{fontSize:40,marginBottom:12}}>⏳</div>
+                <div style={{fontSize:15}}>Waiting for host to start…</div>
+              </div>
+            ) : sorted.map((p,i) => {
+              const wInfo = WINDS.find(w=>w.id===p.windId);
+              const isDealer = p.windId==="E";
               return (
-                <div key={r.round} style={{background:"#131109",borderRadius:10,
-                  border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                    <span style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</span>
-                    {winner&&<span style={{fontSize:11,color:gameAccent,fontWeight:600}}>🏆 {winner.name}</span>}
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,
+                  background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#1A1712",
+                  border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid rgba(255,255,255,0.07)",
+                  borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:p.color,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
+                    {i===0?"👑":i+1}
                   </div>
-                  <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                    {r.entries?.map(e=>(
-                      <span key={e.pid} style={{fontSize:13,
-                        color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"rgba(200,180,160,0.4)"}}>
-                        {e.name}: {e.delta>0?"+":""}{e.delta}
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                      <span style={{fontSize:14,fontWeight:700,color:"#F0E8DC"}}>{p.name}</span>
+                      <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
+                        padding:"1px 6px",borderRadius:8}}>
+                        {wInfo?.emoji} {wInfo?.label}
                       </span>
-                    ))}
+                      {isDealer&&<span style={{fontSize:10,color:"#F5C97A",
+                        background:"rgba(245,201,122,0.15)",padding:"1px 6px",
+                        borderRadius:6,fontWeight:700}}>DEALER</span>}
+                    </div>
                   </div>
+                  <div style={{fontSize:24,fontWeight:900,
+                    color:p.score>0?gameAccent:p.score<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                    {p.score>0?"+":""}{p.score}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Round history */}
+            {roundHistory.length>0&&(
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",letterSpacing:1.5,
+                  textTransform:"uppercase",marginBottom:10}}>
+                  History · {roundHistory.length} rounds
+                </div>
+                {[...roundHistory].reverse().slice(0,8).map(r=>{
+                  const winner = players.find(p=>p.id===r.winnerId);
+                  return (
+                    <div key={r.round} style={{background:"#131109",borderRadius:10,
+                      border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</span>
+                        {winner&&<span style={{fontSize:11,color:gameAccent,fontWeight:600}}>🏆 {winner.name}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                        {r.entries?.map(e=>(
+                          <span key={e.pid} style={{fontSize:13,
+                            color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                            {e.name}: {e.delta>0?"+":""}{e.delta}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── HANDS TAB — identical to host ── */}
+        {tab==="hands"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase"}}>{game.name} · {allHands.length} hands</div>
+            </div>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:14,scrollbarWidth:"none"}}>
+              {cats.map(f=>(
+                <button key={f.id} onClick={()=>{setHandFilter(f.id);setExpandedHand(null);}}
+                  style={{flexShrink:0,padding:"5px 12px",borderRadius:20,
+                    background:handFilter===f.id?gameColor:"transparent",
+                    border:`0.5px solid ${handFilter===f.id?gameColor:"rgba(255,255,255,0.15)"}`,
+                    color:handFilter===f.id?"#0E0C0A":"rgba(200,180,160,0.5)",
+                    fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredHands.map((h,i)=>{
+              const expanded = expandedHand===i;
+              const val = h.pts??h.faan??h.tai;
+              const lim = String(val||"").toLowerCase().includes("limit")||Number(val)>=40;
+              return (
+                <div key={i} style={{background:"#1A1712",
+                  border:`0.5px solid ${lim?gameColor+"60":"rgba(255,255,255,0.08)"}`,
+                  borderRadius:14,marginBottom:10,overflow:"hidden"}}>
+                  <div onClick={()=>setExpandedHand(expanded?null:i)}
+                    style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                      padding:"13px 14px",cursor:"pointer"}}>
+                    <div style={{flex:1,marginRight:10}}>
+                      <div style={{fontSize:14,fontWeight:600,color:"#F0E8DC"}}>{h.name}</div>
+                      <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>{h.desc}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <div style={{background:lim?`${gameColor}30`:"#0E0C0A",
+                        border:`0.5px solid ${lim?gameColor:"rgba(255,255,255,0.12)"}`,
+                        borderRadius:8,padding:"4px 12px",minWidth:40,textAlign:"center"}}>
+                        <div style={{fontSize:14,fontWeight:700,color:gameAccent}}>{val}{typeof val==="number"?" pts":""}</div>
+                      </div>
+                      <span style={{fontSize:14,color:"rgba(200,180,160,0.35)"}}>{expanded?"▲":"▼"}</span>
+                    </div>
+                  </div>
+                  {expanded&&h.groups&&h.groups.length>0&&(
+                    <div style={{borderTop:"0.5px solid rgba(255,255,255,0.07)"}}>
+                      <div style={{padding:"8px 14px 2px",fontSize:10,color:"rgba(200,180,160,0.35)",
+                        letterSpacing:1,textTransform:"uppercase"}}>Example hand</div>
+                      <HandDiagram groups={h.groups} accentColor={gameColor} tileSize={40}/>
+                      <div style={{height:12}}/>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        {players.length===0&&(
-          <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(200,180,160,0.3)"}}>
-            <div style={{fontSize:40,marginBottom:12}}>⏳</div>
-            <div style={{fontSize:15}}>Waiting for host to start the game…</div>
+        {/* ── RULES TAB — identical to host ── */}
+        {tab==="ref"&&(
+          <div>
+            <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,
+              textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
+            <div style={{background:`${gameColor}15`,border:`0.5px solid ${gameColor}40`,
+              borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:gameAccent,lineHeight:1.6}}>
+              📋 Points are additive — stack them all up.
+            </div>
+            {DXB_REF.map((sec,si)=>(
+              <div key={si} style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:gameColor,letterSpacing:1.5,textTransform:"uppercase",
+                  fontWeight:700,marginBottom:8,padding:"4px 0"}}>{sec.section}</div>
+                {sec.items.map((item,ii)=>(
+                  <div key={ii} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"8px 12px",background:ii%2===0?"#1A1712":"#161310",borderRadius:8,marginBottom:2}}>
+                    <span style={{fontSize:13,color:"rgba(200,180,160,0.8)",flex:1,paddingRight:10}}>{item.name}</span>
+                    <span style={{fontSize:14,fontWeight:700,
+                      color:Number(item.pts)<0?"#E05050":gameAccent,flexShrink:0,minWidth:40,textAlign:"right"}}>
+                      {Number(item.pts)>0?"+":""}{item.pts}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         )}
+
       </div>
     </div>
   );
