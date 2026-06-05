@@ -332,101 +332,294 @@ const DXB_SCORE = {
 };
 
 // ─── DUBAI SCORING WIZARD QUESTIONS ──────────────────────────────────────────
-// Multi-step question flow to determine score from a photo
+// Redesigned: fewer steps, grouped logically, each option has tiles shown inline
 
 const DXB_QUESTIONS = [
-  // Phase 1 – Win type
-  { id:"win_type", q:"How did you win?", type:"single",
-    opts:[{id:"discard",label:"Discarded tile",emoji:"♟️"},{id:"self_pick",label:"Self Pick from Wall",emoji:"🤲"},{id:"self_pick_flower",label:"Self Pick from Flower Wall",emoji:"🌸"},{id:"seabed",label:"Last tile from Wall",emoji:"🌊"},{id:"earthly",label:"Earthly — first East discard",emoji:"🌍"},{id:"heavenly",label:"Heavenly — dealer on deal",emoji:"☁️"},{id:"within_7",label:"Win within 7 tiles",emoji:"⚡"}]
-  },
-  // Phase 2 – Concealed/Exposed
-  { id:"exposed", q:"Is your hand concealed or exposed?", type:"single",
-    opts:[{id:"fully_concealed",label:"Fully Concealed",emoji:"🙈"},{id:"fully_exposed",label:"Fully Exposed (last man standing)",emoji:"👁️"},{id:"normal",label:"Normal (mixed)",emoji:"🃏"}],
-    skip:(ans)=>["earthly","heavenly","within_7"].includes(ans.win_type)
-  },
-  // Phase 3 – Closing
-  { id:"closing", q:"Did you Close / Call your hand?", type:"boolean",
-    skip:(ans)=>["fully_exposed"].includes(ans.exposed)||["earthly","heavenly"].includes(ans.win_type)
-  },
-  // Phase 4 – East/Dealer
-  { id:"east", q:"Is the winner East (Dealer), or did East discard the winning tile?", type:"boolean" },
-  // Phase 5 – Flowers
-  { id:"flower_count", q:"How many Flower tiles does the winner have?", type:"number", min:0, max:8 },
-  { id:"seat_flowers", q:"How many of those flowers match the winner's seat number?", type:"number", min:0, max:4,
-    skip:(ans)=>ans.flower_count===0
-  },
-  { id:"bouquet", q:"Any Bouquet bonus?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"mixed",label:"Mixed Bouquet (red+blue 1-4)",emoji:"💐"},{id:"pure",label:"Pure Bouquet (full set same colour)",emoji:"🌺"},{id:"both",label:"Both Mixed AND Pure",emoji:"🌸"}],
-    skip:(ans)=>ans.flower_count===0
-  },
-  // Phase 6 – Pair/Eyes
-  { id:"good_eye", q:"Is the winning pair (Eyes) a 2, 5, or 8? (Good Eye = +2 pts)", type:"boolean" },
-  { id:"wait_type", q:"How were you waiting?", type:"single",
-    opts:[{id:"normal",label:"Normal wait",emoji:"✅"},{id:"single",label:"True Single Wait — 2 pts",emoji:"🎯"},{id:"pairs",label:"Calling by Pairs — 2 pts",emoji:"👥"}]
-  },
-  // Phase 7 – Hand type
-  { id:"hand_type", q:"What type of hand is it?", type:"single",
+
+  // ── STEP 1: Win type + concealed in one question ──
+  { id:"win_type", cat:"🏆 How did you win?",
+    q:"Pick your win type",
+    hint:"This determines your base points",
+    type:"single",
     opts:[
-      {id:"all_sheung",label:"All Sheung (all sequences)",emoji:"〰️"},
-      {id:"all_pong",label:"All Pong (all sets)",emoji:"🎲"},
-      {id:"special",label:"Special Hand (Nico Nico / Orphan / Jade etc.)",emoji:"⭐"},
-      {id:"mixed",label:"Mixed (pongs + sheungs)",emoji:"🃏"},
+      { id:"discard",          label:"Discard Win",          sub:"Only discarder pays",         emoji:"♟️",
+        tiles:[{suit:"bam",n:5}] },
+      { id:"self_pick",        label:"Self Pick",            sub:"All 3 others pay",            emoji:"🤲",
+        tiles:[{suit:"pin",n:3}] },
+      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+10 pts · All 3 pay",    emoji:"🌸",
+        tiles:[{suit:"flower",n:1}] },
+      { id:"seabed",           label:"Last Tile from Wall",  sub:"Seabed +20 pts",             emoji:"🌊",
+        tiles:[{suit:"man",n:9}] },
+      { id:"within_7",         label:"Win within 7 tiles",   sub:"+50 pts",                    emoji:"⚡",
+        tiles:[] },
+      { id:"earthly",          label:"Earthly Hand",         sub:"First East discard · 90 pts", emoji:"🌍",
+        tiles:[] },
+      { id:"heavenly",         label:"Heavenly Hand",        sub:"Dealer wins on deal · 100 pts", emoji:"☁️",
+        tiles:[] },
     ]
   },
-  // Phase 8 – Suit
-  { id:"suit_type", q:"What suits are in the hand?", type:"single",
+
+  // ── STEP 2: Concealed / Exposed ──
+  { id:"exposed", cat:"🙈 Hand visibility",
+    q:"Was your hand concealed or exposed?",
+    hint:"Concealed = no tiles shown to others (except flowers & gongs)",
+    type:"single",
+    skip:(ans)=>["earthly","heavenly","within_7"].includes(ans.win_type),
     opts:[
-      {id:"pure",label:"Pure — one suit only, no honours",emoji:"🟢"},
-      {id:"semi_pure",label:"Semi Pure — one suit + honours",emoji:"🟡"},
-      {id:"two_suit",label:"Two suits (with honours)",emoji:"🔵"},
-      {id:"two_suit_clean",label:"Two suits, NO honours, NO flowers",emoji:"⚪"},
-      {id:"all_five",label:"All 5 suits (3 suits + winds + dragons)",emoji:"🌈"},
-      {id:"mixed",label:"Mixed — any combination",emoji:"❓"},
-    ],
-    skip:(ans)=>ans.hand_type==="special"
+      { id:"normal",         label:"Normal",          sub:"Mix of shown & hidden tiles", emoji:"🃏",
+        tiles:[{suit:"bam",n:2},{suit:"back",n:""},{suit:"back",n:""}] },
+      { id:"fully_concealed",label:"Fully Concealed", sub:"+10 pts (discard) / +15 pts (self pick)", emoji:"🙈",
+        tiles:[{suit:"back",n:""},{suit:"back",n:""},{suit:"back",n:""}] },
+      { id:"fully_exposed",  label:"Fully Exposed",   sub:"Last Man Standing · No Closing", emoji:"👁️",
+        tiles:[{suit:"pin",n:4},{suit:"pin",n:5},{suit:"pin",n:6}] },
+    ]
   },
-  // Phase 9 – Honours
-  { id:"pong_dragon", q:"Dragon Pongs? (2 pts each)", type:"number", min:0, max:3,
-    skip:(ans)=>ans.suit_type==="pure"
+
+  // ── STEP 3: Closing + East in one screen ──
+  { id:"closing", cat:"📣 Closing & Dealer",
+    q:"Did you Close your hand? Is winner East?",
+    hint:"Close = turning tiles face-down to declare tenpai",
+    type:"dual_bool",
+    skip:(ans)=>["earthly","heavenly"].includes(ans.win_type)||ans.exposed==="fully_exposed",
+    fields:[
+      { id:"closing", label:"Hand was Closed / Called", sub:"+5 pts", emoji:"📣" },
+      { id:"east",    label:"Winner is East (Dealer)", sub:"+1 pt",  emoji:"🀀" },
+    ]
   },
-  { id:"pong_wind", q:"Wind Pongs? (1 pt each + seat/round bonuses)", type:"number", min:0, max:4,
-    skip:(ans)=>ans.suit_type==="pure"
+
+  // ── STEP 4: Flowers ──
+  { id:"flower_count", cat:"🌸 Flowers",
+    q:"How many Flower tiles?",
+    hint:"Each flower = 1 pt. Matching seat flower = +1 extra",
+    type:"number", min:0, max:8,
+    tiles:[{suit:"flower",n:1},{suit:"flower",n:2}]
   },
-  { id:"wind_seat", q:"Does any wind pong match the winner's seat?", type:"boolean",
-    skip:(ans)=>!ans.pong_wind||ans.pong_wind===0
+  { id:"seat_flowers", cat:"🌸 Flowers",
+    q:"How many match your seat number?",
+    hint:"E.g. East player = flowers #1. Matching seat = +1 bonus each",
+    type:"number", min:0, max:4,
+    skip:(ans)=>Number(ans.flower_count)===0,
+    tiles:[{suit:"flower",n:1}]
   },
-  { id:"wind_round", q:"Does any wind pong match the round wind?", type:"boolean",
-    skip:(ans)=>!ans.pong_wind||ans.pong_wind===0
+  { id:"bouquet", cat:"🌸 Flowers",
+    q:"Bouquet bonus?",
+    hint:"Mixed = one red + one blue 1-4. Pure = full set same colour",
+    type:"single",
+    skip:(ans)=>Number(ans.flower_count)<2,
+    opts:[
+      { id:"none",  label:"No Bouquet",                          emoji:"❌", tiles:[] },
+      { id:"mixed", label:"Mixed Bouquet",   sub:"Red+Blue 1-4 · All pay 5 pts immediately", emoji:"💐",
+        tiles:[{suit:"flower",n:1},{suit:"flower",n:3}] },
+      { id:"pure",  label:"Pure Bouquet",    sub:"Full set same colour · All pay 10 pts",    emoji:"🌺",
+        tiles:[{suit:"flower",n:1},{suit:"flower",n:2}] },
+      { id:"both",  label:"Both Bouquets",   sub:"Mixed + Pure",                             emoji:"🌸",
+        tiles:[{suit:"flower",n:1},{suit:"flower",n:2},{suit:"flower",n:3}] },
+    ]
   },
-  // Phase 10 – Special combos
-  { id:"dragon_combo", q:"Dragon combination?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"little",label:"Little Dragons (2 pongs + pair)",emoji:"🐉"},{id:"big",label:"Big Dragons (3 pongs)",emoji:"🔥"}],
-    skip:(ans)=>!ans.pong_dragon||ans.pong_dragon<2
+
+  // ── STEP 5: Eyes + Wait together ──
+  { id:"eyes_wait", cat:"👀 Eyes & Wait",
+    q:"Pair (Eyes) and waiting type",
+    hint:"Good Eye = pair of 2s, 5s or 8s. True Single = only 1 tile can win",
+    type:"dual_choice",
+    fields:[
+      { id:"good_eye",  label:"Good Eye?",   sub:"Pair of 2s, 5s or 8s = +2 pts", emoji:"👀",
+        type:"bool", tiles:[{suit:"pin",n:2},{suit:"pin",n:2}] },
+      { id:"wait_type", label:"Wait type",   emoji:"⏳",
+        type:"select", opts:[
+          {id:"normal", label:"Normal wait",      emoji:"✅"},
+          {id:"single", label:"True Single Wait", emoji:"🎯", sub:"+2 pts"},
+          {id:"pairs",  label:"Calling by Pairs", emoji:"👥", sub:"+2 pts"},
+        ]
+      },
+    ]
   },
-  { id:"wind_combo", q:"Wind combination?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"little3",label:"Little 3 Winds (2 pongs + pair)",emoji:"💨"},{id:"big3",label:"Big 3 Winds (3 pongs)",emoji:"🌪️"},{id:"little4",label:"Little 4 Winds (3 pongs + pair)",emoji:"🌬️"},{id:"big4",label:"Big 4 Winds (4 pongs)",emoji:"⚡"}],
-    skip:(ans)=>!ans.pong_wind||ans.pong_wind<2
+
+  // ── STEP 6: Hand type ──
+  { id:"hand_type", cat:"🀄 Hand type",
+    q:"What kind of hand?",
+    hint:"Look at your 5 melds — are they all sequences, all triplets, or mixed?",
+    type:"single",
+    opts:[
+      { id:"all_sheung", label:"All Sheung",   sub:"All 5 melds are sequences · +5 pts", emoji:"〰️",
+        tiles:[{suit:"man",n:1},{suit:"man",n:2},{suit:"man",n:3}] },
+      { id:"all_pong",   label:"All Pong",     sub:"All 5 melds are triplets · +25 pts", emoji:"🎲",
+        tiles:[{suit:"pin",n:7},{suit:"pin",n:7},{suit:"pin",n:7}] },
+      { id:"special",    label:"Special Hand", sub:"Nico Nico / Orphans / Jade / Ruby / Diamond", emoji:"⭐",
+        tiles:[] },
+      { id:"mixed",      label:"Mixed",        sub:"Mix of sequences and triplets", emoji:"🃏",
+        tiles:[{suit:"bam",n:3},{suit:"bam",n:4},{suit:"bam",n:5},{suit:"man",n:9},{suit:"man",n:9},{suit:"man",n:9}] },
+    ]
   },
-  // Phase 11 – Concealed pongs
-  { id:"concealed_pongs", q:"How many Concealed Pongs (or Gongs counted as concealed)?", type:"number", min:0, max:5 },
-  // Phase 12 – Gongs
-  { id:"open_gongs", q:"How many Open Gongs?", type:"number", min:0, max:4 },
-  { id:"concealed_gongs", q:"How many Concealed Gongs?", type:"number", min:0, max:4 },
-  // Phase 13 – Special patterns
-  { id:"dragon_run", q:"Any Dragon Run (1-9 complete run)?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"mix_exp",label:"Mixed Dragon — Exposed (8 pts)",emoji:"🐲"},{id:"mix_con",label:"Mixed Dragon — Concealed (10 pts)",emoji:"🀫"},{id:"pure_exp",label:"Pure Dragon — Exposed (15 pts)",emoji:"🔥"},{id:"pure_con",label:"Pure Dragon — Concealed (20 pts)",emoji:"💎"}]
+
+  // ── STEP 7: Special hand (only if special selected) ──
+  { id:"special_hand", cat:"⭐ Special Hand",
+    q:"Which special hand?",
+    type:"single",
+    skip:(ans)=>ans.hand_type!=="special",
+    opts:[
+      { id:"nico",     label:"Nico Nico",    sub:"7 pairs + 1 pong · 40 pts · No Closing",  emoji:"🎭",
+        tiles:[{suit:"man",n:2},{suit:"man",n:2},{suit:"pin",n:4},{suit:"pin",n:4},{suit:"bam",n:9},{suit:"bam",n:9},{suit:"bam",n:9}] },
+      { id:"orphan13", label:"13 Orphans",   sub:"90 pts · No Closing",                     emoji:"🃏",
+        tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
+      { id:"orphan16", label:"16 Orphans",   sub:"50 pts · No Closing",                     emoji:"🃏",
+        tiles:[{suit:"man",n:1},{suit:"pin",n:9},{suit:"wind",n:"S"},{suit:"dragon",n:"W"}] },
+      { id:"jade",     label:"Jade Hand",    sub:"Green Dragon pong + all Bamboo · 20 pts", emoji:"💚",
+        tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"bam",n:3},{suit:"bam",n:4},{suit:"bam",n:5}] },
+      { id:"ruby",     label:"Ruby Hand",    sub:"Red Dragon pong + all Characters · 20 pts",emoji:"❤️",
+        tiles:[{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"man",n:6},{suit:"man",n:7},{suit:"man",n:8}] },
+      { id:"diamond",  label:"Diamond Hand", sub:"White Dragon pong + all Circles · 20 pts",emoji:"💎",
+        tiles:[{suit:"dragon",n:"W"},{suit:"dragon",n:"W"},{suit:"dragon",n:"W"},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4}] },
+    ]
   },
-  { id:"step_up", q:"Step-Up Sheung? (3+ sequential chows stepping up by 1)", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"step",label:"Step Up (3 sets, any suit) — 5 pts",emoji:"📈"},{id:"all_step",label:"All Step Up (5 sets) — 20 pts",emoji:"🚀"},{id:"all_step_pure",label:"All Step Up Same Suit — 90 pts",emoji:"💯"}],
-    skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special"
+
+  // ── STEP 8: Suit ──
+  { id:"suit_type", cat:"🎨 Suit pattern",
+    q:"What suits are in the hand?",
+    type:"single",
+    skip:(ans)=>ans.hand_type==="special",
+    opts:[
+      { id:"mixed",        label:"Mixed suits",        sub:"All 3 suits + honours",              emoji:"🌈",
+        tiles:[{suit:"man",n:3},{suit:"pin",n:5},{suit:"bam",n:7}] },
+      { id:"two_suit",     label:"Two suits + honours",sub:"+8 pts",                             emoji:"🔵",
+        tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4}] },
+      { id:"two_suit_clean",label:"Two suits only",    sub:"No honours or flowers · +15 pts",    emoji:"⚪",
+        tiles:[{suit:"man",n:7},{suit:"man",n:8},{suit:"man",n:9},{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3}] },
+      { id:"semi_pure",    label:"Semi Pure",          sub:"One suit + honours · +30 pts",       emoji:"🟡",
+        tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
+      { id:"pure",         label:"Pure Suit",          sub:"One suit only · +90 pts",            emoji:"🟢",
+        tiles:[{suit:"pin",n:1},{suit:"pin",n:3},{suit:"pin",n:5},{suit:"pin",n:7},{suit:"pin",n:9}] },
+      { id:"all_five",     label:"All 5 Suits",        sub:"3 suits + winds + dragons · +10 pts",emoji:"🌈",
+        tiles:[{suit:"man",n:1},{suit:"pin",n:1},{suit:"bam",n:1},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
+    ]
   },
-  { id:"terminals", q:"Terminal pattern?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"no_term",label:"No Terminals (with honours) — 5 pts",emoji:"🚫"},{id:"no_term_no_hon",label:"No Terminals, No Honours — 8 pts",emoji:"⛔"},{id:"all_term_hon",label:"All Terminals WITH Honours — 20 pts",emoji:"🔢"},{id:"all_term_pure",label:"All Terminals, NO Honours — 40 pts",emoji:"💯"}]
+
+  // ── STEP 9: Honours (dragons + winds) ──
+  { id:"pong_dragon", cat:"🐉 Dragons",
+    q:"How many Dragon Pongs/Gongs?",
+    hint:"Red 中, Green 發, White 白 — 2 pts each",
+    type:"number", min:0, max:3,
+    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special",
+    tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"}]
   },
-  // Phase 14 – special hands
-  { id:"special_hand", q:"Special hand?", type:"single",
-    opts:[{id:"none",label:"None",emoji:"❌"},{id:"nico",label:"Nico Nico (7 pairs + pong) — 40 pts",emoji:"🎭"},{id:"orphan13",label:"13 Orphans — 90 pts",emoji:"🃏"},{id:"orphan16",label:"16 Orphans — 50 pts",emoji:"🃏"},{id:"jade",label:"Jade Hand — 20 pts",emoji:"💚"},{id:"ruby",label:"Ruby Hand — 20 pts",emoji:"❤️"},{id:"diamond",label:"Diamond Hand — 20 pts",emoji:"💎"}],
-    skip:(ans)=>ans.hand_type!=="special"
+  { id:"dragon_combo", cat:"🐉 Dragons",
+    q:"Dragon combination?",
+    type:"single",
+    skip:(ans)=>Number(ans.pong_dragon)<2,
+    opts:[
+      { id:"none",  label:"No combo",      emoji:"❌", tiles:[] },
+      { id:"little",label:"Little Dragon", sub:"2 pongs + dragon pair · +20 pts", emoji:"🐉",
+        tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"dragon",n:"W"},{suit:"dragon",n:"W"}] },
+      { id:"big",   label:"Big Dragon",    sub:"All 3 pongs · +40 pts", emoji:"🔥",
+        tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"dragon",n:"R"},{suit:"dragon",n:"W"},{suit:"dragon",n:"W"},{suit:"dragon",n:"W"}] },
+    ]
+  },
+  { id:"pong_wind", cat:"💨 Winds",
+    q:"How many Wind Pongs/Gongs?",
+    hint:"1 pt each + 1 bonus if it's your seat wind + 1 bonus if it's the round wind",
+    type:"number", min:0, max:4,
+    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special",
+    tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
+  },
+  { id:"wind_seat", cat:"💨 Winds",
+    q:"Does a wind pong match the winner's seat?",
+    hint:"+1 pt bonus if your seat wind tile is in a pong",
+    type:"boolean",
+    skip:(ans)=>Number(ans.pong_wind)===0,
+    tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
+  },
+  { id:"wind_round", cat:"💨 Winds",
+    q:"Does a wind pong match the round wind?",
+    hint:"+1 pt bonus if the current round wind tile is in a pong",
+    type:"boolean",
+    skip:(ans)=>Number(ans.pong_wind)===0,
+    tiles:[{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"}]
+  },
+  { id:"wind_combo", cat:"💨 Winds",
+    q:"Wind combination?",
+    type:"single",
+    skip:(ans)=>Number(ans.pong_wind)<2,
+    opts:[
+      { id:"none",   label:"No combo",       emoji:"❌", tiles:[] },
+      { id:"little3",label:"Little 3 Winds", sub:"2 pongs + wind pair · +15 pts",       emoji:"💨",
+        tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"W"},{suit:"wind",n:"W"}] },
+      { id:"big3",   label:"Big 3 Winds",    sub:"3 wind pongs · +30 pts",             emoji:"🌪️",
+        tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"W"},{suit:"wind",n:"W"},{suit:"wind",n:"W"}] },
+      { id:"little4",label:"Little 4 Winds", sub:"3 pongs + wind pair · +60 pts",       emoji:"🌬️",
+        tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"W"},{suit:"wind",n:"W"},{suit:"wind",n:"W"},{suit:"wind",n:"N"},{suit:"wind",n:"N"}] },
+      { id:"big4",   label:"Big 4 Winds",    sub:"All 4 wind pongs · +80 pts",          emoji:"⚡",
+        tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"W"},{suit:"wind",n:"W"},{suit:"wind",n:"W"},{suit:"wind",n:"N"},{suit:"wind",n:"N"},{suit:"wind",n:"N"}] },
+    ]
+  },
+
+  // ── STEP 10: Concealed pongs + Gongs together ──
+  { id:"concealed_pongs", cat:"🔒 Concealed sets",
+    q:"How many Concealed Pongs?",
+    hint:"Hidden triplets in your hand. Each Open Gong = 1 Concealed Pong",
+    type:"number", min:0, max:5,
+    tiles:[{suit:"back",n:""},{suit:"pin",n:5},{suit:"pin",n:5},{suit:"back",n:""}]
+  },
+  { id:"open_gongs", cat:"🔒 Concealed sets",
+    q:"How many Open Gongs?",
+    hint:"4 of same tile, declared face-up · +1 pt each",
+    type:"number", min:0, max:4,
+    tiles:[{suit:"bam",n:7},{suit:"bam",n:7},{suit:"bam",n:7},{suit:"bam",n:7}]
+  },
+  { id:"concealed_gongs", cat:"🔒 Concealed sets",
+    q:"How many Concealed Gongs?",
+    hint:"4 of same tile, kept hidden · +1 pt + collect 5 pts from each player immediately",
+    type:"number", min:0, max:4,
+    tiles:[{suit:"back",n:""},{suit:"man",n:3},{suit:"man",n:3},{suit:"back",n:""}]
+  },
+
+  // ── STEP 11: Bonus patterns ──
+  { id:"dragon_run", cat:"🐲 Dragon Run",
+    q:"Any Dragon Run? (1–9 complete sequence)",
+    hint:"Three sheungs forming 1-2-3, 4-5-6, 7-8-9",
+    type:"single",
+    skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
+    opts:[
+      { id:"none",     label:"No Dragon Run",         emoji:"❌", tiles:[] },
+      { id:"mix_exp",  label:"Mixed Dragon — Exposed", sub:"All 3 suits · +8 pts",       emoji:"🐲",
+        tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
+      { id:"mix_con",  label:"Mixed Dragon — Concealed",sub:"All 3 suits · +10 pts",     emoji:"🀫",
+        tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
+      { id:"pure_exp", label:"Pure Dragon — Exposed",  sub:"Same suit · +15 pts",        emoji:"🔥",
+        tiles:[{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
+      { id:"pure_con", label:"Pure Dragon — Concealed",sub:"Same suit · +20 pts",        emoji:"💎",
+        tiles:[{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
+    ]
+  },
+  { id:"step_up", cat:"📈 Step Up",
+    q:"Step-Up Sheung?",
+    hint:"3+ sequences each stepping 1 number higher than the previous",
+    type:"single",
+    skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
+    opts:[
+      { id:"none",          label:"No Step Up", emoji:"❌", tiles:[] },
+      { id:"step",          label:"Step Up",    sub:"3 stepping sheungs · +5 pts",       emoji:"📈",
+        tiles:[{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4},{suit:"man",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6}] },
+      { id:"all_step",      label:"All Step Up",sub:"All 5 sheungs step up · +20 pts",  emoji:"🚀",
+        tiles:[{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4},{suit:"man",n:3},{suit:"man",n:4},{suit:"man",n:5}] },
+      { id:"all_step_pure", label:"All Step Up Same Suit",sub:"+90 pts",                emoji:"💯",
+        tiles:[{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:4}] },
+    ]
+  },
+  { id:"terminals", cat:"🔢 Terminals",
+    q:"Terminal tiles (1s and 9s)?",
+    hint:"Terminals = tiles numbered 1 or 9 in any suit",
+    type:"single",
+    opts:[
+      { id:"none",          label:"Normal mix",              sub:"No bonus",                         emoji:"—",  tiles:[] },
+      { id:"no_term",       label:"No Terminals",            sub:"No 1s or 9s (honours OK) · +5 pts",emoji:"🚫",
+        tiles:[{suit:"man",n:3},{suit:"pin",n:5},{suit:"bam",n:7}] },
+      { id:"no_term_no_hon",label:"No Terminals, No Honours",sub:"Clean hand · +8 pts",             emoji:"⛔",
+        tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6}] },
+      { id:"all_term_hon",  label:"All Terminals + Honours", sub:"+20 pts",                         emoji:"🔢",
+        tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
+      { id:"all_term_pure", label:"All Terminals, No Honours",sub:"+40 pts",                       emoji:"💯",
+        tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"pin",n:1},{suit:"pin",n:9},{suit:"bam",n:1}] },
+    ]
   },
 ];
 
@@ -435,9 +628,15 @@ function calcDxbScore(ans) {
   const breakdown = [];
   const add = (n, label) => { if(n>0){pts+=n; breakdown.push({pts:n,label});} };
 
+  // Extract dual-field answers
+  const closing   = ans.closing   ?? ans["closing.closing"]   ?? false;
+  const east      = ans.east      ?? ans["closing.east"]      ?? false;
+  const good_eye  = ans.good_eye  ?? ans["eyes_wait.good_eye"]?? false;
+  const wait_type = ans.wait_type ?? ans["eyes_wait.wait_type"]?? "normal";
+
   // Always
   add(DXB_SCORE.mahjong, "Mahjong/Winning");
-  if(ans.closing) add(DXB_SCORE.closing, "Closing/Calling");
+  if(closing) add(DXB_SCORE.closing, "Closing/Calling");
 
   // Win type
   if(ans.win_type==="heavenly") { add(DXB_SCORE.heavenly,"Heavenly Hand"); return {pts,breakdown}; }
@@ -456,7 +655,7 @@ function calcDxbScore(ans) {
     if(ans.win_type==="self_pick"||ans.win_type==="self_pick_flower") add(DXB_SCORE.fully_exposed_self_pick,"Fully Exposed — Self Pick");
     else add(DXB_SCORE.fully_exposed_discard,"Fully Exposed — Discard");
   }
-  if(ans.east) add(DXB_SCORE.east_dealer,"East/Dealer bonus");
+  if(east) add(DXB_SCORE.east_dealer,"East/Dealer bonus");
 
   // Flowers
   const fc = Number(ans.flower_count||0);
@@ -474,9 +673,9 @@ function calcDxbScore(ans) {
   else if(fc===0&&(!ans.pong_dragon||ans.pong_dragon===0)&&(!ans.pong_wind||ans.pong_wind===0)) add(DXB_SCORE.no_honours,"No Honour tiles");
 
   // Good eye / pair
-  if(ans.good_eye===true) add(DXB_SCORE.good_eye,"Good Eyes (2, 5 or 8 pair)");
-  if(ans.wait_type==="single") add(DXB_SCORE.true_single_wait,"True Single Wait");
-  if(ans.wait_type==="pairs") add(DXB_SCORE.calling_by_pairs,"Calling by Pairs");
+  if(good_eye===true) add(DXB_SCORE.good_eye,"Good Eyes (2, 5 or 8 pair)");
+  if(wait_type==="single") add(DXB_SCORE.true_single_wait,"True Single Wait");
+  if(wait_type==="pairs") add(DXB_SCORE.calling_by_pairs,"Calling by Pairs");
 
   // Suit
   if(ans.suit_type==="pure") add(DXB_SCORE.pure_suit,"Pure Suit (one suit only)");
@@ -557,43 +756,41 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
   const [answers, setAnswers] = useState(prefilled);
   const [done, setDone] = useState(false);
   const [result, setResult] = useState(null);
+  // For dual_bool / dual_choice — track partial answers
+  const [dualState, setDualState] = useState({});
 
-  // Questions where AI already has a confident answer — skip them automatically
-  const AI_AUTO_SKIP = aiResult && aiResult.confidence === "high"
-    ? Object.keys(prefilled)
-    : [];
+  const AI_AUTO_SKIP = aiResult && aiResult.confidence === "high" ? Object.keys(prefilled) : [];
 
   const activeQs = DXB_QUESTIONS.filter(q => {
     if (q.skip && q.skip(answers)) return false;
-    // Auto-skip questions AI already answered at high confidence
     if (AI_AUTO_SKIP.includes(q.id)) return false;
     return true;
   });
   const current = activeQs[step];
 
-  const answer = (val) => {
-    const newAns = { ...answers, [current.id]: val };
+  const commitAnswer = (id, val) => {
+    const newAns = { ...answers, [id]: val };
     setAnswers(newAns);
+    setDualState({});
     if (step + 1 >= activeQs.length) {
       const r = calcDxbScore(newAns);
-      setResult(r);
-      setDone(true);
+      setResult(r); setDone(true);
     } else {
       setStep(s => s + 1);
     }
   };
 
-  const reset = () => { setStep(0); setAnswers(prefilled); setDone(false); setResult(null); };
+  const reset = () => { setStep(0); setAnswers(prefilled); setDone(false); setResult(null); setDualState({}); };
 
+  // ── DONE SCREEN ──
   if (done && result) {
     return (
       <div>
-        <div style={{background:`${accentColor}18`,border:`1.5px solid ${accentColor}55`,borderRadius:16,padding:20,marginBottom:16}}>
-          <div style={{fontSize:11,color:accentColor,letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>✓ Score calculated</div>
-          <div style={{fontSize:56,fontWeight:900,color:accent,lineHeight:1}}>{result.pts}</div>
+        <div style={{background:`${accentColor}18`,border:`1.5px solid ${accentColor}55`,borderRadius:16,padding:20,marginBottom:16,textAlign:"center"}}>
+          <div style={{fontSize:11,color:accentColor,letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>✓ Score calculated</div>
+          <div style={{fontSize:64,fontWeight:900,color:accent,lineHeight:1}}>{result.pts}</div>
           <div style={{fontSize:14,color:"rgba(200,180,160,0.6)",marginTop:6}}>points total</div>
         </div>
-
         <div style={{background:"#1A1712",borderRadius:12,border:"0.5px solid rgba(255,255,255,0.08)",padding:14,marginBottom:16}}>
           <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>Breakdown</div>
           {result.breakdown.map((b,i)=>(
@@ -602,27 +799,17 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
               <span style={{fontSize:14,fontWeight:700,color:accent}}>+{b.pts}</span>
             </div>
           ))}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 0",marginTop:4}}>
+          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",marginTop:4}}>
             <span style={{fontSize:14,fontWeight:700,color:"#F0E8DC"}}>TOTAL</span>
             <span style={{fontSize:22,fontWeight:900,color:accent}}>{result.pts} pts</span>
           </div>
         </div>
-
         <div style={{fontSize:12,color:`${accentColor}99`,background:`${accentColor}10`,borderRadius:10,padding:"10px 14px",marginBottom:12,lineHeight:1.6}}>
-          Tap below to go to the Players tab where you can select who won and calculate payments automatically.
+          Tap below to go to Players and calculate who pays what.
         </div>
-
         <div style={{display:"flex",gap:10}}>
-          <button onClick={reset}
-            style={{flex:1,padding:11,background:"none",border:`0.5px solid ${accentColor}50`,borderRadius:10,color:accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-            New hand
-          </button>
-          <button
-            onClick={()=>{
-              // Call onDone first so parent stores the score,
-              // then the setTimeout in parent handles navigation
-              if (onDone) onDone(result.pts);
-            }}
+          <button onClick={reset} style={{flex:1,padding:11,background:"none",border:`0.5px solid ${accentColor}50`,borderRadius:10,color:accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>New hand</button>
+          <button onClick={()=>{ if(onDone) onDone(result.pts); }}
             style={{flex:2,padding:11,background:accentColor,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
             Go to Players tab →
           </button>
@@ -632,90 +819,246 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
   }
 
   if (!current) return null;
-  const progress = Math.round((step/activeQs.length)*100);
+  const progress = Math.round(((step) / activeQs.length) * 100);
+  const isAI = prefilled[current.id] !== undefined;
+
+  // Mini tile strip for question context
+  const QuestionTiles = ({tiles=[]}) => {
+    if(!tiles||tiles.length===0) return null;
+    return (
+      <div style={{display:"flex",gap:3,flexWrap:"wrap",margin:"8px 0 4px"}}>
+        {tiles.slice(0,8).map((t,i)=><Tile key={i} suit={t.suit} n={t.n} size={30}/>)}
+      </div>
+    );
+  };
 
   return (
     <div>
-      {/* Progress */}
+      {/* Progress bar */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <div style={{flex:1,height:4,background:"rgba(255,255,255,0.08)",borderRadius:2,overflow:"hidden"}}>
-          <div style={{width:`${progress}%`,height:"100%",background:accentColor,borderRadius:2,transition:"width 0.3s"}}/>
+        <div style={{flex:1,height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{width:`${progress}%`,height:"100%",background:accentColor,borderRadius:3,transition:"width 0.25s"}}/>
         </div>
         <span style={{fontSize:11,color:"rgba(200,180,160,0.4)",whiteSpace:"nowrap"}}>{step+1}/{activeQs.length}</span>
       </div>
 
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
-        <div style={{fontSize:16,fontWeight:600,color:"#F0E8DC"}}>{current.q}</div>
-        {prefilled[current.id] !== undefined && (
-          <div style={{flexShrink:0,fontSize:10,fontWeight:700,color:accentColor,background:`${accentColor}18`,border:`0.5px solid ${accentColor}40`,borderRadius:10,padding:"2px 8px",marginTop:2}}>🤖 AI detected</div>
-        )}
+      {/* Category badge */}
+      {current.cat && (
+        <div style={{fontSize:12,fontWeight:700,color:accentColor,background:`${accentColor}15`,
+          borderRadius:20,padding:"4px 12px",display:"inline-block",marginBottom:10}}>
+          {current.cat}
+        </div>
+      )}
+
+      {/* Question + AI badge */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:4}}>
+        <div style={{fontSize:17,fontWeight:700,color:"#F0E8DC"}}>{current.q}</div>
+        {isAI && <div style={{flexShrink:0,fontSize:10,fontWeight:700,color:accentColor,
+          background:`${accentColor}18`,border:`0.5px solid ${accentColor}40`,
+          borderRadius:10,padding:"2px 8px",marginTop:2}}>🤖 AI</div>}
       </div>
 
+      {/* Hint */}
+      {current.hint && (
+        <div style={{fontSize:12,color:"rgba(200,180,160,0.45)",marginBottom:8,lineHeight:1.5}}>{current.hint}</div>
+      )}
+
+      {/* Question tiles */}
+      <QuestionTiles tiles={current.tiles}/>
+
       {/* Back button */}
-      {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{background:"none",border:"none",color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer",padding:"4px 0 12px",display:"block"}}>← Back</button>}
+      {step > 0 && (
+        <button onClick={()=>{ setStep(s=>s-1); setDualState({}); }}
+          style={{background:"none",border:"none",color:"rgba(200,180,160,0.4)",fontSize:12,
+            cursor:"pointer",padding:"6px 0 12px",display:"block"}}>← Back</button>
+      )}
 
-      {/* Options */}
-      {current.type==="single" && (
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {current.opts.map(opt=>{
-            const isPrefilled = prefilled[current.id] === opt.id;
+      {/* ── SINGLE SELECT ── */}
+      {current.type === "single" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
+          {current.opts.map(opt => {
+            const isPre = prefilled[current.id] === opt.id;
             return (
-              <button key={opt.id} onClick={()=>answer(opt.id)}
-                style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",
-                  background:isPrefilled?`${accentColor}18`:"#1A1712",
-                  border:`0.5px solid ${isPrefilled?accentColor:"rgba(255,255,255,0.08)"}`,
+              <button key={opt.id} onClick={()=>commitAnswer(current.id, opt.id)}
+                style={{display:"flex",alignItems:"flex-start",gap:12,padding:"12px 14px",
+                  background:isPre?`${accentColor}18`:"#1A1712",
+                  border:`1px solid ${isPre?accentColor:"rgba(255,255,255,0.08)"}`,
                   borderRadius:12,cursor:"pointer",textAlign:"left",width:"100%"}}>
-                <span style={{fontSize:22,flexShrink:0}}>{opt.emoji}</span>
-                <span style={{fontSize:14,color:isPrefilled?"#F0E8DC":"#E8E0D5",fontWeight:isPrefilled?700:500,flex:1}}>{opt.label}</span>
-                {isPrefilled&&<span style={{fontSize:10,color:accentColor,fontWeight:700,flexShrink:0}}>🤖 AI</span>}
+                <span style={{fontSize:24,flexShrink:0,marginTop:1}}>{opt.emoji}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,color:isPre?"#F0E8DC":"#E8E0D5",fontWeight:isPre?700:500}}>
+                    {opt.label}
+                    {isPre&&<span style={{fontSize:10,color:accentColor,fontWeight:700,marginLeft:6}}>🤖</span>}
+                  </div>
+                  {opt.sub && <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2}}>{opt.sub}</div>}
+                  {/* Tile preview */}
+                  {opt.tiles && opt.tiles.length > 0 && (
+                    <div style={{display:"flex",gap:2,marginTop:6,flexWrap:"wrap"}}>
+                      {opt.tiles.slice(0,9).map((t,i)=><Tile key={i} suit={t.suit} n={t.n} size={26}/>)}
+                    </div>
+                  )}
+                </div>
               </button>
             );
           })}
         </div>
       )}
 
-      {current.type==="boolean" && (
-        <div style={{display:"flex",gap:10}}>
-          {[{id:true,label:"Yes",emoji:"✅"},{id:false,label:"No",emoji:"❌"}].map(opt=>{
-            const isPrefilled = prefilled[current.id] === opt.id;
+      {/* ── BOOLEAN ── */}
+      {current.type === "boolean" && (
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          {[{id:true,label:"Yes",emoji:"✅"},{id:false,label:"No",emoji:"❌"}].map(opt => {
+            const isPre = prefilled[current.id] === opt.id;
             return (
-              <button key={String(opt.id)} onClick={()=>answer(opt.id)}
-                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"20px 12px",
-                  background:isPrefilled?`${accentColor}18`:"#1A1712",
-                  border:`0.5px solid ${isPrefilled?accentColor:"rgba(255,255,255,0.08)"}`,
+              <button key={String(opt.id)} onClick={()=>commitAnswer(current.id, opt.id)}
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:8,
+                  padding:"20px 12px",
+                  background:isPre?`${accentColor}18`:"#1A1712",
+                  border:`1px solid ${isPre?accentColor:"rgba(255,255,255,0.08)"}`,
                   borderRadius:12,cursor:"pointer"}}>
-                <span style={{fontSize:28}}>{opt.emoji}</span>
-                <span style={{fontSize:15,color:isPrefilled?"#F0E8DC":"#E8E0D5",fontWeight:600}}>{opt.label}</span>
-                {isPrefilled&&<span style={{fontSize:10,color:accentColor,fontWeight:700}}>🤖 AI</span>}
+                <span style={{fontSize:30}}>{opt.emoji}</span>
+                <span style={{fontSize:15,color:isPre?"#F0E8DC":"#E8E0D5",fontWeight:600}}>{opt.label}</span>
+                {isPre&&<span style={{fontSize:10,color:accentColor,fontWeight:700}}>🤖 AI</span>}
               </button>
             );
           })}
         </div>
       )}
 
-      {current.type==="number" && (
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {Array.from({length:(current.max-current.min+1)},(_,i)=>i+current.min).map(n=>{
-            const isPrefilled = prefilled[current.id] === n;
+      {/* ── NUMBER ── */}
+      {current.type === "number" && (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+          {Array.from({length:(current.max-current.min+1)},(_,i)=>i+current.min).map(n => {
+            const isPre = prefilled[current.id] === n;
             return (
-              <button key={n} onClick={()=>answer(n)}
-                style={{width:56,height:56,
-                  background:isPrefilled?`${accentColor}25`:"#1A1712",
-                  border:`0.5px solid ${isPrefilled?accentColor:"rgba(255,255,255,0.08)"}`,
+              <button key={n} onClick={()=>commitAnswer(current.id, n)}
+                style={{width:54,height:54,
+                  background:isPre?`${accentColor}25`:"#1A1712",
+                  border:`1px solid ${isPre?accentColor:"rgba(255,255,255,0.1)"}`,
                   borderRadius:12,cursor:"pointer",
-                  fontSize:isPrefilled?18:20,fontWeight:700,
-                  color:isPrefilled?accentColor:"#E8E0D5",
-                  position:"relative"}}>
+                  fontSize:20,fontWeight:700,
+                  color:isPre?accentColor:"#E8E0D5",position:"relative"}}>
                 {n}
-                {isPrefilled&&<div style={{position:"absolute",top:-4,right:-4,width:10,height:10,borderRadius:"50%",background:accentColor}}/>}
+                {isPre&&<div style={{position:"absolute",top:-3,right:-3,width:9,height:9,borderRadius:"50%",background:accentColor}}/>}
               </button>
             );
           })}
         </div>
       )}
+
+      {/* ── DUAL BOOL — two yes/no toggles on one screen ── */}
+      {current.type === "dual_bool" && (
+        <div style={{marginTop:8}}>
+          {current.fields.map(f => (
+            <div key={f.id} style={{background:"#1A1712",borderRadius:12,padding:"12px 14px",marginBottom:8,
+              border:"0.5px solid rgba(255,255,255,0.08)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:18}}>{f.emoji}</span>
+                    <span style={{fontSize:14,fontWeight:600,color:"#F0E8DC"}}>{f.label}</span>
+                  </div>
+                  {f.sub&&<div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2,marginLeft:24}}>{f.sub}</div>}
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  {[{v:true,l:"Yes"},{v:false,l:"No"}].map(opt=>(
+                    <button key={String(opt.v)} onClick={()=>setDualState(s=>({...s,[f.id]:opt.v}))}
+                      style={{padding:"6px 12px",borderRadius:8,
+                        background:dualState[f.id]===opt.v?`${accentColor}25`:"#0E0C0A",
+                        border:`1px solid ${dualState[f.id]===opt.v?accentColor:"rgba(255,255,255,0.1)"}`,
+                        color:dualState[f.id]===opt.v?accentColor:"rgba(200,180,160,0.5)",
+                        fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+          {/* Confirm when all fields answered */}
+          {current.fields.every(f=>dualState[f.id]!==undefined) && (
+            <button onClick={()=>{
+              const merged = {...answers};
+              current.fields.forEach(f=>{ merged[f.id]=dualState[f.id]; });
+              setAnswers(merged);
+              setDualState({});
+              if(step+1>=activeQs.length){ setResult(calcDxbScore(merged)); setDone(true); }
+              else setStep(s=>s+1);
+            }} style={{width:"100%",padding:12,background:accentColor,border:"none",borderRadius:10,
+              color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4}}>
+              Next →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── DUAL CHOICE — one bool + one select on one screen ── */}
+      {current.type === "dual_choice" && (
+        <div style={{marginTop:8}}>
+          {current.fields.map(f => (
+            <div key={f.id} style={{background:"#1A1712",borderRadius:12,padding:"12px 14px",marginBottom:8,
+              border:"0.5px solid rgba(255,255,255,0.08)"}}>
+              <div style={{fontSize:13,fontWeight:600,color:"#F0E8DC",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:16}}>{f.emoji}</span>{f.label}
+              </div>
+              {f.type==="bool" && (
+                <div>
+                  {f.tiles && f.tiles.length>0 && (
+                    <div style={{display:"flex",gap:3,marginBottom:8}}>
+                      {f.tiles.map((t,i)=><Tile key={i} suit={t.suit} n={t.n} size={28}/>)}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:6}}>
+                    {[{v:true,l:"Yes ✅"},{v:false,l:"No ❌"}].map(opt=>(
+                      <button key={String(opt.v)} onClick={()=>setDualState(s=>({...s,[f.id]:opt.v}))}
+                        style={{flex:1,padding:"8px",borderRadius:8,
+                          background:dualState[f.id]===opt.v?`${accentColor}25`:"#0E0C0A",
+                          border:`1px solid ${dualState[f.id]===opt.v?accentColor:"rgba(255,255,255,0.1)"}`,
+                          color:dualState[f.id]===opt.v?accentColor:"rgba(200,180,160,0.5)",
+                          fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                  {f.sub&&<div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginTop:4}}>{f.sub}</div>}
+                </div>
+              )}
+              {f.type==="select" && (
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {f.opts.map(opt=>(
+                    <button key={opt.id} onClick={()=>setDualState(s=>({...s,[f.id]:opt.id}))}
+                      style={{padding:"6px 12px",borderRadius:8,
+                        background:dualState[f.id]===opt.id?`${accentColor}25`:"#0E0C0A",
+                        border:`1px solid ${dualState[f.id]===opt.id?accentColor:"rgba(255,255,255,0.1)"}`,
+                        cursor:"pointer",textAlign:"left"}}>
+                      <div style={{fontSize:12,fontWeight:600,color:dualState[f.id]===opt.id?accentColor:"rgba(200,180,160,0.6)"}}>{opt.emoji} {opt.label}</div>
+                      {opt.sub&&<div style={{fontSize:10,color:"rgba(200,180,160,0.35)",marginTop:1}}>{opt.sub}</div>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {current.fields.every(f=>dualState[f.id]!==undefined) && (
+            <button onClick={()=>{
+              const merged = {...answers};
+              current.fields.forEach(f=>{ merged[f.id]=dualState[f.id]; });
+              setAnswers(merged);
+              setDualState({});
+              if(step+1>=activeQs.length){ setResult(calcDxbScore(merged)); setDone(true); }
+              else setStep(s=>s+1);
+            }} style={{width:"100%",padding:12,background:accentColor,border:"none",borderRadius:10,
+              color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4}}>
+              Next →
+            </button>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
+
 
 // ─── AI VISION — calls secure Netlify proxy (API key never exposed to browser) ──
 
@@ -957,7 +1300,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
         <div>
           <div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:12}}>
             <video ref={videoRef} autoPlay playsInline muted
-              style={{width:"100%",height:"260px",objectFit:"cover",display:"block",borderRadius:14,background:"#000"}}
+              style={{width:"100%",height:"220px",objectFit:"cover",display:"block",borderRadius:14,background:"#000"}}
             />
             <div style={{position:"absolute",inset:0,border:`2px solid ${game.color}`,borderRadius:14,pointerEvents:"none"}}/>
             {/* Corner guides */}
@@ -1435,6 +1778,7 @@ export default function MahjongApp() {
     setPlayers(newPlayers);
     setRound(r => r + 1);
     setPendingPayment(null);
+    setPendingScore(null);  // ← clears the payment panel completely
   };
 
   const handleWizardScore = (score) => {
