@@ -700,80 +700,26 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
   );
 }
 
-// ─── AI VISION — analyse photo via Claude API ─────────────────────────────────
+// ─── AI VISION — calls secure Netlify proxy (API key never exposed to browser) ──
 
 async function analyseHandPhoto(base64Image) {
-  const systemPrompt = `You are an expert Taiwanese/Dubai-style Mahjong tile recognition AI.
-You will be shown a photo of a winning Mahjong hand (17 tiles laid face-up).
-Analyse the tiles carefully and return a JSON object with the following fields.
-Return ONLY raw JSON, no markdown, no explanation.
-
-{
-  "tiles_visible": true or false,
-  "ai_notes": "brief plain-English description of what you see",
-  "flower_count": number (0-8),
-  "has_seat_flowers": true/false (if any flower tile numbers seem to match a seat position),
-  "suit_type": "pure" | "semi_pure" | "two_suit" | "two_suit_clean" | "all_five" | "mixed",
-  "hand_type": "all_sheung" | "all_pong" | "special" | "mixed",
-  "pong_dragon": number (0-3, count of distinct dragon pong/gong sets),
-  "pong_wind": number (0-4, count of distinct wind pong/gong sets),
-  "open_gongs": number (0-4),
-  "concealed_gongs": number (0-4),
-  "concealed_pongs": number (0-5, estimate of concealed pong sets),
-  "good_eye": true/false (is the pair/eyes a 2, 5, or 8 of any suit),
-  "dragon_run": "none" | "mix_exp" | "mix_con" | "pure_exp" | "pure_con",
-  "step_up": "none" | "step" | "all_step" | "all_step_pure",
-  "terminals": "none" | "no_term" | "no_term_no_hon" | "all_term_hon" | "all_term_pure",
-  "special_hand": "none" | "nico" | "orphan13" | "orphan16" | "jade" | "ruby" | "diamond",
-  "dragon_combo": "none" | "little" | "big",
-  "wind_combo": "none" | "little3" | "big3" | "little4" | "big4",
-  "confidence": "high" | "medium" | "low"
-}
-
-Rules for Dubai-style Mahjong:
-- Sheung = sequence of 3 consecutive tiles same suit
-- Pong = 3 identical tiles  
-- Gong = 4 identical tiles (Open Gong if exposed, Concealed if face-down)
-- Flowers are bonus tiles (red garden 1-4, blue garden 1-4)
-- Dragons: Red (中), Green (發), White (白/P)
-- Winds: East (東/E), South (南/S), West (西/W), North (北/N)
-- Jade Hand: Green Dragon pong + all Bamboo tiles
-- Ruby Hand: Red Dragon pong + all Character tiles  
-- Diamond Hand: White Dragon pong + all Circle tiles
-- Nico Nico: 7 pairs + 1 pong (special hand)
-- If tiles are unclear or photo quality is poor, set confidence to "low" and make best guesses`;
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // Call our own Netlify function — it holds the API key server-side
+  const response = await fetch("/api/analyse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: "image/jpeg", data: base64Image }
-          },
-          {
-            type: "text",
-            text: "Analyse this Mahjong winning hand photo and return the JSON object as instructed."
-          }
-        ]
-      }]
-    })
+    body: JSON.stringify({ image: base64Image }),
   });
 
-  const data = await response.json();
-  const text = data.content?.find(b => b.type === "text")?.text || "{}";
-  try {
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
-  } catch {
-    return { tiles_visible: false, confidence: "low", ai_notes: "Could not parse response" };
+  if (!response.ok) {
+    let errMsg = `Server error ${response.status}`;
+    try {
+      const errData = await response.json();
+      errMsg = errData.error || errMsg;
+    } catch {}
+    throw new Error(errMsg);
   }
+
+  return await response.json();
 }
 
 // Convert video frame to base64 JPEG via canvas
@@ -909,10 +855,16 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
       setAnalysisDone(true);
       setMode("review");
     } catch (err) {
-      setAnalysisError("Analysis failed — " + (err.message || "unknown error"));
-      setMode("camera");
-      setCameraActive(false);
-      setTimeout(startCamera, 300);
+      // Show the actual error — don't silently reset
+      const msg = err.message || "Analysis failed";
+      setAnalysisError(
+        msg.includes("API key not configured")
+          ? "⚠️ API key not set up yet — see setup instructions below."
+          : msg.includes("401") || msg.includes("403")
+          ? "⚠️ Invalid API key. Check your Netlify environment variable."
+          : `⚠️ Analysis failed: ${msg}. You can still score manually.`
+      );
+      setMode("home"); // go back to home with error shown, not camera
     } finally {
       setAnalysing(false);
     }
@@ -1338,6 +1290,7 @@ export default function MahjongApp() {
   const [expandedHand, setExpandedHand] = useState(null);
   const [showGamePicker, setShowGamePicker] = useState(false);
   const [pendingScore, setPendingScore] = useState(null);
+  const [pendingPayment, setPendingPayment] = useState(null); // { score, payments[], winnerId }
   const [editingPlayer, setEditingPlayer] = useState(null); // player id being edited
   const [showSetup, setShowSetup] = useState(!saved); // show setup on first launch
 
@@ -1407,8 +1360,60 @@ export default function MahjongApp() {
     ...(isDXB?[{id:"ref",label:"Rules",icon:"📋"}]:[]),
   ];
 
+  // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
+  // Rules confirmed by user:
+  // - Self-pick: all 3 losers pay the full score. East pays score + 1 extra.
+  // - Discard win: only discarder pays. If East discarded → East pays double.
+
+  const calcPayments = (score, winnerId, winType, discarderId) => {
+    const winner = players.find(p => p.id === winnerId);
+    if (!winner) return [];
+
+    const losers = players.filter(p => p.id !== winnerId);
+    const payments = []; // { fromId, toId, amount }
+
+    if (winType === "self_pick") {
+      losers.forEach(loser => {
+        const isEast = loser.windId === "E";
+        const amount = isEast ? score + 1 : score;
+        payments.push({ fromId: loser.id, toId: winnerId, amount });
+      });
+    } else {
+      // Discard win — only discarder pays
+      const discarder = players.find(p => p.id === discarderId);
+      if (!discarder) return [];
+      const isEastDiscard = discarder.windId === "E";
+      const amount = isEastDiscard ? score * 2 : score;
+      payments.push({ fromId: discarderId, toId: winnerId, amount });
+    }
+
+    return payments;
+  };
+
+  const applyPayments = (payments) => {
+    const deltas = {}; // playerId → net change
+    payments.forEach(({ fromId, toId, amount }) => {
+      deltas[fromId] = (deltas[fromId] || 0) - amount;
+      deltas[toId]   = (deltas[toId]   || 0) + amount;
+    });
+
+    const newPlayers = players.map(p => ({
+      ...p, score: p.score + (deltas[p.id] || 0)
+    }));
+    const entries = players.map(p => ({
+      pid: p.id, name: p.name, delta: deltas[p.id] || 0
+    }));
+
+    setRoundHistory(h => [...h, { round, entries, payments }]);
+    setPlayers(newPlayers);
+    setRound(r => r + 1);
+    setPendingPayment(null);
+  };
+
   const handleWizardScore = (score) => {
-    setPendingScore(score);
+    // Store as object with pts + selection state
+    setPendingScore({ pts: score, _winnerId: null, _winType: null, _discarderId: null });
+    setPendingPayment(null);
     setTab("players");
   };
 
@@ -1525,18 +1530,156 @@ export default function MahjongApp() {
               </div>
             )}
 
-            {/* ── PENDING SCORE BANNER ── */}
-            {pendingScore!==null&&(
-              <div style={{background:`${game.color}18`,border:`1px solid ${game.color}55`,borderRadius:12,padding:14,marginBottom:16}}>
-                <div style={{fontSize:12,color:game.accent,fontWeight:600,marginBottom:8}}>🀄 Wizard calculated: {pendingScore} pts — add to which player?</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {players.map(p=>(
-                    <button key={p.id} onClick={()=>{setScoreInputs(s=>({...s,[p.id]:pendingScore}));setPendingScore(null);}}
-                      style={{padding:"6px 14px",background:`${p.color}22`,border:`1px solid ${p.color}55`,borderRadius:20,color:p.color,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                      {p.name}
-                    </button>
-                  ))}
-                  <button onClick={()=>setPendingScore(null)} style={{padding:"6px 14px",background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:20,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>Dismiss</button>
+            {/* ── PAYMENT FLOW — shown after wizard calculates score ── */}
+            {pendingScore !== null && pendingPayment === null && (
+              <div style={{background:"#1A1712",borderRadius:14,border:`1.5px solid ${game.color}50`,padding:16,marginBottom:16}}>
+                <div style={{fontSize:13,fontWeight:700,color:game.accent,marginBottom:4}}>
+                  🀄 Score calculated: <span style={{fontSize:22,fontWeight:900}}>{pendingScore}</span> pts
+                </div>
+                <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginBottom:14}}>Select winner and how they won to calculate payments</div>
+
+                {/* Winner picker */}
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who won?</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {players.map(p => {
+                      const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+                      const sel = pendingScore?._winnerId === p.id;
+                      return (
+                        <button key={p.id}
+                          onClick={()=>setPendingScore(s=>({...s,_winnerId:p.id,_discarderId:null,_winType:null}))}
+                          style={{padding:"7px 13px",borderRadius:20,
+                            border:`1.5px solid ${pendingScore._winnerId===p.id?p.color:"rgba(255,255,255,0.12)"}`,
+                            background:pendingScore._winnerId===p.id?`${p.color}25`:"transparent",
+                            cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{fontSize:14}}>{WEMOJI[p.windId]||"🀀"}</span>
+                          <span style={{fontSize:13,fontWeight:700,color:pendingScore._winnerId===p.id?p.color:"rgba(200,180,160,0.7)"}}>{p.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Win type */}
+                {pendingScore._winnerId && (
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>How did they win?</div>
+                    <div style={{display:"flex",gap:8}}>
+                      {[{id:"self_pick",label:"Self Pick",emoji:"🤲",sub:"All 3 pay"},{id:"discard",label:"Discard Win",emoji:"♟️",sub:"Discarder pays"}].map(wt=>(
+                        <button key={wt.id}
+                          onClick={()=>setPendingScore(s=>({...s,_winType:wt.id,_discarderId:null}))}
+                          style={{flex:1,padding:"10px 8px",borderRadius:12,
+                            border:`1.5px solid ${pendingScore._winType===wt.id?game.color:"rgba(255,255,255,0.1)"}`,
+                            background:pendingScore._winType===wt.id?`${game.color}20`:"transparent",
+                            cursor:"pointer",textAlign:"center"}}>
+                          <div style={{fontSize:20,marginBottom:3}}>{wt.emoji}</div>
+                          <div style={{fontSize:13,fontWeight:700,color:pendingScore._winType===wt.id?game.accent:"rgba(200,180,160,0.7)"}}>{wt.label}</div>
+                          <div style={{fontSize:10,color:"rgba(200,180,160,0.4)",marginTop:1}}>{wt.sub}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Discarder picker */}
+                {pendingScore._winType==="discard" && (
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who discarded the winning tile?</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {players.filter(p=>p.id!==pendingScore._winnerId).map(p=>{
+                        const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+                        const isEast = p.windId==="E";
+                        return (
+                          <button key={p.id}
+                            onClick={()=>setPendingScore(s=>({...s,_discarderId:p.id}))}
+                            style={{padding:"7px 12px",borderRadius:20,
+                              border:`1.5px solid ${pendingScore._discarderId===p.id?p.color:"rgba(255,255,255,0.12)"}`,
+                              background:pendingScore._discarderId===p.id?`${p.color}25`:"transparent",
+                              cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                            <span style={{fontSize:13}}>{WEMOJI[p.windId]||"🀀"}</span>
+                            <span style={{fontSize:12,fontWeight:600,color:pendingScore._discarderId===p.id?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
+                            {isEast&&<span style={{fontSize:9,color:"#F5C97A",fontWeight:700}}>×2</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Calculate button */}
+                {pendingScore._winType &&
+                  (pendingScore._winType==="self_pick" || pendingScore._discarderId) && (
+                  <button
+                    onClick={()=>{
+                      const payments = calcPayments(
+                        pendingScore.pts,
+                        pendingScore._winnerId,
+                        pendingScore._winType,
+                        pendingScore._discarderId
+                      );
+                      setPendingPayment({ score: pendingScore.pts, payments, winnerId: pendingScore._winnerId });
+                    }}
+                    style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                    Calculate payments →
+                  </button>
+                )}
+
+                <button onClick={()=>setPendingScore(null)}
+                  style={{marginTop:8,width:"100%",padding:8,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* ── PAYMENT CONFIRMATION ── */}
+            {pendingPayment && (
+              <div style={{background:"#1A1712",borderRadius:14,border:`1.5px solid ${game.color}60`,padding:16,marginBottom:16}}>
+                <div style={{fontSize:13,fontWeight:700,color:game.accent,marginBottom:12}}>💰 Payment breakdown</div>
+                {pendingPayment.payments.map((pay,i)=>{
+                  const from = players.find(p=>p.id===pay.fromId);
+                  const to   = players.find(p=>p.id===pay.toId);
+                  if(!from||!to) return null;
+                  const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
+                      <div style={{flex:1}}>
+                        <span style={{fontSize:13,color:"#E05050",fontWeight:600}}>{WEMOJI[from.windId]} {from.name}</span>
+                        <span style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}> pays </span>
+                        <span style={{fontSize:13,color:"#8FBC8F",fontWeight:600}}>{WEMOJI[to.windId]} {to.name}</span>
+                      </div>
+                      <div style={{fontSize:18,fontWeight:900,color:game.accent,flexShrink:0}}>
+                        {pay.amount} pts
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Net summary */}
+                <div style={{marginTop:10,padding:"8px 0"}}>
+                  {(() => {
+                    const deltas = {};
+                    pendingPayment.payments.forEach(({fromId,toId,amount})=>{
+                      deltas[fromId]=(deltas[fromId]||0)-amount;
+                      deltas[toId]  =(deltas[toId]  ||0)+amount;
+                    });
+                    return players.map(p=>{
+                      const d=deltas[p.id]||0;
+                      if(d===0) return null;
+                      return (
+                        <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
+                          <span style={{fontSize:12,color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
+                          <span style={{fontSize:13,fontWeight:700,color:d>0?"#8FBC8F":"#E05050"}}>{d>0?"+":""}{d}</span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+                <div style={{display:"flex",gap:10,marginTop:12}}>
+                  <button onClick={()=>{setPendingPayment(null);setPendingScore(null);}}
+                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>Cancel</button>
+                  <button onClick={()=>applyPayments(pendingPayment.payments)}
+                    style={{flex:2,padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                    Confirm & update scores ✓
+                  </button>
                 </div>
               </div>
             )}
@@ -1587,22 +1730,37 @@ export default function MahjongApp() {
 
             {/* ── ADD ROUND SCORES ── */}
             <div style={{background:"#1A1712",borderRadius:14,border:`0.5px solid ${game.color}30`,padding:16,marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:600,color:game.accent,marginBottom:12}}>Add Round {round} scores</div>
+              <div style={{fontSize:13,fontWeight:600,color:game.accent,marginBottom:4}}>Add Round {round} scores</div>
+              <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginBottom:12}}>
+                Enter a score then tap <strong style={{color:"rgba(200,180,160,0.6)"}}>Pay</strong> to auto-calculate payments, or enter ± manually for each player.
+              </div>
               {players.map(p=>(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                   <div style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,color:"#E8E0D5",fontWeight:500}}>{p.name}</div>
-                    <div style={{fontSize:10,color:"rgba(200,180,160,0.4)"}}>{windLabel(p.windId)?.emoji} {windLabel(p.windId)?.label}{p.windId===roundWind?" · +1 wind bonus":""}</div>
+                    <div style={{fontSize:10,color:"rgba(200,180,160,0.35)"}}>{windLabel(p.windId)?.emoji} {windLabel(p.windId)?.label}{p.windId===roundWind?" · round wind":""}</div>
                   </div>
+                  {/* Quick Pay button — sets this player as winner and opens payment flow */}
+                  <button
+                    onClick={()=>{
+                      const pts = Number(scoreInputs[p.id]||0);
+                      if(pts<=0){alert("Enter a score first");return;}
+                      setPendingScore({pts, _winnerId:p.id, _winType:null, _discarderId:null});
+                      setPendingPayment(null);
+                      setScoreInputs({});
+                    }}
+                    style={{padding:"5px 10px",background:`${p.color}20`,border:`0.5px solid ${p.color}50`,borderRadius:8,color:p.color,fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+                    Pay
+                  </button>
                   <input type="number" placeholder="±0" value={scoreInputs[p.id]||""}
                     onChange={e=>setScoreInputs(s=>({...s,[p.id]:e.target.value}))}
-                    style={{width:80,padding:"7px 10px",background:"#0E0C0A",border:`1px solid ${p.color}40`,borderRadius:8,color:"#F0E8DC",fontSize:14,fontWeight:600,textAlign:"center",outline:"none"}}/>
+                    style={{width:70,padding:"7px 8px",background:"#0E0C0A",border:`1px solid ${p.color}40`,borderRadius:8,color:"#F0E8DC",fontSize:14,fontWeight:600,textAlign:"center",outline:"none"}}/>
                 </div>
               ))}
               <button onClick={addRound}
-                style={{width:"100%",marginTop:8,padding:"11px",background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                Confirm Round {round}
+                style={{width:"100%",marginTop:8,padding:"11px",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,color:"rgba(200,180,160,0.7)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Confirm manual scores (no payments)
               </button>
             </div>
 
