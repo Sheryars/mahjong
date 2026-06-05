@@ -1692,7 +1692,7 @@ async function apiUpdateRoom(code, gameState) {
 }
 
 // ─── LANDING SCREEN ───────────────────────────────────────────────────────────
-function LandingScreen({ onLocal, onCreateRoom, onJoinRoom }) {
+function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }) {
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
@@ -1722,9 +1722,9 @@ function LandingScreen({ onLocal, onCreateRoom, onJoinRoom }) {
       {/* Options */}
       <div style={{width:"100%",maxWidth:380,display:"flex",flexDirection:"column",gap:12}}>
 
-        {/* Continue local game */}
+        {/* Continue local game — only if saved state exists */}
         {loadState() && (
-          <button onClick={onLocal}
+          <button onClick={onContinueLocal}
             style={{width:"100%",padding:"16px 20px",background:"#1A1712",
               border:"1px solid rgba(200,146,58,0.4)",borderRadius:14,cursor:"pointer",
               display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
@@ -1736,19 +1736,19 @@ function LandingScreen({ onLocal, onCreateRoom, onJoinRoom }) {
           </button>
         )}
 
-        {/* New local game */}
-        <button onClick={onLocal}
+        {/* New local game — always shown */}
+        <button onClick={onNewLocal}
           style={{width:"100%",padding:"16px 20px",background:"#1A1712",
             border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:14,cursor:"pointer",
             display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
           <span style={{fontSize:28}}>🎲</span>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>{loadState()?"New Local Game":"Start Local Game"}</div>
-            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Play on this device only · Scores saved locally</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>New Local Game</div>
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh game on this device · Clears saved data</div>
           </div>
         </button>
 
-        {/* Create shared room */}
+        {/* Create shared room — resets everything */}
         <button onClick={onCreateRoom}
           style={{width:"100%",padding:"16px 20px",background:"linear-gradient(135deg,#C8923A22,#F5C97A11)",
             border:"1.5px solid #C8923A60",borderRadius:14,cursor:"pointer",
@@ -1756,7 +1756,7 @@ function LandingScreen({ onLocal, onCreateRoom, onJoinRoom }) {
           <span style={{fontSize:28}}>🔗</span>
           <div>
             <div style={{fontSize:15,fontWeight:700,color:"#F5C97A"}}>Create Shared Room</div>
-            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Get a code to share with friends · Live scoreboard</div>
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh game · Share code with friends · Live scoreboard</div>
           </div>
         </button>
 
@@ -1956,14 +1956,32 @@ function GuestView({ room, onLeave }) {
 export default function MahjongApp() {
   const [appMode, setAppMode] = useState("landing"); // landing | local | host | guest
   const [room, setRoom] = useState(null);
-  const [roomSyncing, setRoomSyncing] = useState(false);
-  const [roomError, setRoomError] = useState("");
+  const [freshStart, setFreshStart] = useState(false); // true = ignore saved state
+
+  const startFreshLocal = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setFreshStart(true);
+    setAppMode("local");
+  };
+
+  const continueLocal = () => {
+    setFreshStart(false);
+    setAppMode("local");
+  };
+
+  const startFreshHost = (r) => {
+    localStorage.removeItem(STORAGE_KEY);
+    setFreshStart(true);
+    setRoom(r);
+    setAppMode("host");
+  };
 
   // ── Landing screen ──
   if (appMode === "landing") {
     return (
       <LandingScreen
-        onLocal={() => setAppMode("local")}
+        onContinueLocal={continueLocal}
+        onNewLocal={startFreshLocal}
         onCreateRoom={() => setAppMode("creating")}
         onJoinRoom={(r) => { setRoom(r); setAppMode("guest"); }}
       />
@@ -1973,7 +1991,7 @@ export default function MahjongApp() {
   // ── Creating room ──
   if (appMode === "creating") {
     return <CreatingRoomScreen
-      onCreated={(r) => { setRoom(r); setAppMode("host"); }}
+      onCreated={(r) => startFreshHost(r)}
       onCancel={() => setAppMode("landing")}
     />;
   }
@@ -1985,9 +2003,11 @@ export default function MahjongApp() {
 
   // ── Host or local game ──
   return <GameApp
+    key={freshStart ? "fresh" : "saved"}  // key change forces full remount = fresh state
     isHost={appMode === "host"}
     room={room}
-    onLeaveRoom={() => { setRoom(null); setAppMode("local"); }}
+    freshStart={freshStart}
+    onLeaveRoom={() => { setRoom(null); setFreshStart(false); setAppMode("landing"); }}
   />;
 }
 
@@ -2037,8 +2057,8 @@ function CreatingRoomScreen({ onCreated, onCancel }) {
 }
 
 // ─── GAME APP (host or local) ─────────────────────────────────────────────────
-function GameApp({ isHost = false, room = null, onLeaveRoom }) {
-  const saved = loadState();
+function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false }) {
+  const saved = freshStart ? null : loadState();
 
   const [activeGame, setActiveGame] = useState(
     saved?.gameId ? (GAMES.find(g=>g.id===saved.gameId)||GAMES[0]) : GAMES[0]
@@ -2055,7 +2075,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom }) {
   const [pendingScore, setPendingScore] = useState(null);
   const [pendingPayment, setPendingPayment] = useState(null); // { score, payments[], winnerId }
   const [editingPlayer, setEditingPlayer] = useState(null); // player id being edited
-  const [showSetup, setShowSetup] = useState(!saved); // show setup on first launch
+  const [showSetup, setShowSetup] = useState(freshStart || !saved);
 
   // Persist locally
   useEffect(() => {
