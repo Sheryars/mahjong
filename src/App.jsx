@@ -1,234 +1,74 @@
 import { useState, useRef, useEffect } from "react";
+import { TILE_IMAGES } from "./tileImages.js";
 
-// ─── SVG TILE COMPONENT — Realistic mahjong tiles with English labels ──────────
+// ─── PHOTO TILE COMPONENT ─────────────────────────────────────────────────────
+// Uses real cropped photos from the user's actual tile set.
+// Falls back to styled SVG for flower tiles (not in the photo set).
+
 const SUIT_COLORS = {
   man:"#C0392B", pin:"#1565C0", bam:"#1B5E20",
   wind:"#4527A0", dragon:"#E65100", flower:"#AD1457", back:"#1A237E"
 };
 
-// Dot pip positions for Circles suit (1–9)
-function DotPips({ n, col, w, h }) {
-  const cfg = {
-    1: [[.5,.5]],
-    2: [[.5,.27],[.5,.73]],
-    3: [[.5,.22],[.5,.5],[.5,.78]],
-    4: [[.28,.27],[.72,.27],[.28,.73],[.72,.73]],
-    5: [[.28,.22],[.72,.22],[.5,.5],[.28,.78],[.72,.78]],
-    6: [[.28,.2],[.72,.2],[.28,.5],[.72,.5],[.28,.8],[.72,.8]],
-    7: [[.28,.18],[.72,.18],[.28,.47],[.72,.47],[.5,.32],[.28,.76],[.72,.76]],
-    8: [[.28,.15],[.72,.15],[.28,.42],[.72,.42],[.28,.69],[.72,.69],[.28,.88],[.72,.88]],
-    9: [[.22,.15],[.5,.15],[.78,.15],[.22,.42],[.5,.42],[.78,.42],[.22,.69],[.5,.69],[.78,.69]],
-  };
-  const pts = cfg[n] || [];
-  const r = n >= 8 ? w*0.13 : n >= 6 ? w*0.14 : n >= 4 ? w*0.15 : w*0.17;
-  return <>
-    {pts.map(([fx,fy], i) => (
-      <g key={i}>
-        <circle cx={fx*w} cy={fy*h} r={r} fill={col}/>
-        <circle cx={fx*w-r*0.25} cy={fy*h-r*0.3} r={r*0.35} fill="rgba(255,255,255,0.3)"/>
-      </g>
-    ))}
-  </>;
-}
-
-// Bamboo stalk segments
-function BamStalks({ n, col, w, h }) {
-  const cols = n<=3?[.5]:n<=6?[.3,.7]:[.2,.5,.8];
-  const rows = Math.ceil(n/cols.length);
-  const items = []; let placed = 0;
-  for (let r = 0; r < rows && placed < n; r++) {
-    const y = (h * 0.12) + r * ((h * 0.78) / Math.max(rows - 1, 1));
-    for (let c = 0; c < cols.length && placed < n; c++, placed++) {
-      const x = cols[c] * w;
-      const sw = w * 0.16, sh = h * 0.18;
-      items.push(
-        <g key={placed}>
-          {/* Stalk body */}
-          <rect x={x-sw/2} y={y-sh/2} width={sw} height={sh} rx={sw*0.4} fill={col}/>
-          {/* Joint ring */}
-          <rect x={x-sw/2-1} y={y-1} width={sw+2} height={sh*0.22} rx={sw*0.3} fill="rgba(0,0,0,0.2)"/>
-          {/* Highlight */}
-          <rect x={x-sw/2+sw*0.15} y={y-sh/2+sh*0.1} width={sw*0.25} height={sh*0.5} rx={sw*0.15} fill="rgba(255,255,255,0.3)"/>
-        </g>
-      );
-    }
-  }
-  return <>{items}</>;
-}
-
 function Tile({ suit, n, size = 44 }) {
   const W = size, H = Math.round(size * 1.45);
-  const col = SUIT_COLORS[suit] || "#4527A0";
-  const shadow = { filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.55))" };
+  const shadow = { filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.6))" };
 
-  // ── Shared tile shell: ivory face with 3D bevel ──
-  const Shell = ({ children, bg = "#F2EAD3" }) => (
-    <>
-      {/* Outer border / bevel */}
-      <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#C8B89A"/>
-      {/* Light top/left bevel */}
-      <rect x={1} y={1} width={W-2} height={H*0.5} rx={size*0.09} fill="rgba(255,255,255,0.4)"/>
-      {/* Main face */}
-      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07} fill={bg}/>
-      {/* Subtle inner shadow */}
-      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07}
-        fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={size*0.03}/>
-      {children}
-    </>
-  );
+  // Map suit+n to image key
+  const key = suit === "man"    ? `man_${n}`
+             : suit === "pin"    ? `pin_${n}`
+             : suit === "bam"    ? `bam_${n}`
+             : suit === "wind"   ? `wind_${n}`
+             : suit === "dragon" ? `dragon_${n}`
+             : null;
 
-  // ── CIRCLES (Dots) ──
-  if (suit === "pin") {
-    const innerW = W * 0.82, innerH = H * 0.62;
-    const ix = W * 0.09, iy = H * 0.08;
+  const src = key ? TILE_IMAGES[key] : null;
+
+  // Real photo tile
+  if (src) {
     return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell>
-          <g transform={`translate(${ix},${iy})`}>
-            <DotPips n={n} col={col} w={innerW} h={innerH}/>
-          </g>
-          {/* Number + suit label */}
-          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
-            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
-            {n} DOT
-          </text>
-        </Shell>
-      </svg>
+      <div style={{
+        display:"inline-block", verticalAlign:"middle",
+        width:W, height:H, borderRadius:Math.max(3,size*0.09),
+        overflow:"hidden", flexShrink:0,
+        ...shadow
+      }}>
+        <img src={src} alt={key} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+      </div>
     );
   }
 
-  // ── BAMBOO ──
-  if (suit === "bam") {
-    const innerW = W * 0.82, innerH = H * 0.62;
-    const ix = W * 0.09, iy = H * 0.08;
-    return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell>
-          <g transform={`translate(${ix},${iy})`}>
-            <BamStalks n={n} col={col} w={innerW} h={innerH}/>
-          </g>
-          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
-            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
-            {n} BAM
-          </text>
-        </Shell>
-      </svg>
-    );
-  }
-
-  // ── CHARACTERS ──
-  if (suit === "man") {
-    return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell>
-          {/* Big number */}
-          <text x={W*0.5} y={H*0.44} textAnchor="middle" dominantBaseline="middle"
-            fill={col} fontSize={size*0.55} fontWeight="900" fontFamily="'Arial Black',Arial,sans-serif">{n}</text>
-          {/* "CHR" label */}
-          <text x={W*0.5} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
-            fill={col} fontSize={size*0.17} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">
-            {n} CHR
-          </text>
-        </Shell>
-      </svg>
-    );
-  }
-
-  // ── WINDS ──
-  if (suit === "wind") {
-    const WBGS = { E:"#311B92", S:"#0D47A1", W:"#4E342E", N:"#1B5E20" };
-    const WLABELS = { E:"EAST", S:"SOUTH", W:"WEST", N:"NORTH" };
-    const WLETTERS = { E:"E", S:"S", W:"W", N:"N" };
-    const bg2 = WBGS[n] || "#311B92";
-    const letter = WLETTERS[n] || n;
-    const label = WLABELS[n] || n;
-    return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell>
-          {/* Coloured background block */}
-          <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06} fill={bg2}/>
-          {/* Wind initial letter — large white */}
-          <text x={W*0.5} y={H*0.39} textAnchor="middle" dominantBaseline="middle"
-            fill="white" fontSize={size*0.46} fontWeight="900" fontFamily="'Arial Black',Arial,sans-serif">{letter}</text>
-          {/* "WIND" word */}
-          <text x={W*0.5} y={H*0.74} textAnchor="middle" dominantBaseline="middle"
-            fill={bg2} fontSize={size*0.15} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="1">WIND</text>
-          {/* Full direction name */}
-          <text x={W*0.5} y={H*0.88} textAnchor="middle" dominantBaseline="middle"
-            fill={bg2} fontSize={size*0.14} fontWeight="700" fontFamily="Arial,sans-serif" opacity="0.8">{label}</text>
-        </Shell>
-      </svg>
-    );
-  }
-
-  // ── DRAGONS ──
-  if (suit === "dragon") {
-    const DBGS = { G:"#1B5E20", R:"#B71C1C", W:"#546E7A" };
-    const DLABELS = { G:"GREEN", R:"RED", W:"WHITE" };
-    const DWORD = { G:"DRAGON", R:"DRAGON", W:"DRAGON" };
-    const bg2 = DBGS[n] || "#B71C1C";
-    const dlabel = DLABELS[n] || n;
-    const isWhite = n === "W";
-    return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell>
-          {/* Colour block */}
-          <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06}
-            fill={bg2} opacity={isWhite ? 0.15 : 1}/>
-          {isWhite && <rect x={W*0.1} y={H*0.09} width={W*0.8} height={H*0.58} rx={size*0.06}
-            fill="none" stroke={bg2} strokeWidth={size*0.07}/>}
-          {/* Colour label e.g. "GREEN" */}
-          <text x={W*0.5} y={H*0.3} textAnchor="middle" dominantBaseline="middle"
-            fill={isWhite ? bg2 : "white"} fontSize={size*0.2} fontWeight="900"
-            fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">{dlabel}</text>
-          {/* "DRAGON" */}
-          <text x={W*0.5} y={H*0.49} textAnchor="middle" dominantBaseline="middle"
-            fill={isWhite ? bg2 : "white"} fontSize={size*0.16} fontWeight="800"
-            fontFamily="Arial,sans-serif" letterSpacing="0.5">DRAGON</text>
-          {/* Dragon emoji-style graphic */}
-          <text x={W*0.5} y={H*0.77} textAnchor="middle" dominantBaseline="middle"
-            fontSize={size*0.26}>🐉</text>
-        </Shell>
-      </svg>
-    );
-  }
-
-  // ── FLOWERS ──
+  // Flower tile — SVG fallback
   if (suit === "flower") {
     const emojis = ["🌸","🌺","🌼","🌻","🍀","🌿","🎋","🌱"];
     const e = typeof n === "number" ? emojis[(n-1)%8] : "🌸";
     return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <Shell bg="#FFF8F0">
-          <text x={W*0.5} y={H*0.42} textAnchor="middle" dominantBaseline="middle"
-            fontSize={size*0.42}>{e}</text>
-          <text x={W*0.5} y={H*0.76} textAnchor="middle" dominantBaseline="middle"
-            fill="#AD1457" fontSize={size*0.16} fontWeight="800" fontFamily="'Arial Black',Arial,sans-serif" letterSpacing="0.5">FLOWER</text>
-          <text x={W*0.5} y={H*0.89} textAnchor="middle" dominantBaseline="middle"
-            fill="#AD1457" fontSize={size*0.13} fontFamily="Arial,sans-serif" opacity="0.7">#{typeof n==="number"?n:""}</text>
-        </Shell>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+        style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+        <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#C8B89A"/>
+        <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14}
+          rx={size*0.07} fill="#FFF8F0"/>
+        <text x={W/2} y={H*0.44} textAnchor="middle" dominantBaseline="middle"
+          fontSize={size*0.4}>{e}</text>
+        <text x={W/2} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
+          fill="#AD1457" fontSize={Math.max(5,size*0.15)} fontWeight="800"
+          fontFamily="Arial,sans-serif" letterSpacing="0.5">FLOWER</text>
       </svg>
     );
   }
 
-  // ── FACE DOWN ──
+  // Face-down / unknown
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+      style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
       <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#1A237E"/>
-      <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14} rx={size*0.07}
+      <rect x={W*0.1} y={H*0.08} width={W*0.8} height={H*0.84} rx={size*0.07}
         fill="none" stroke="#3949AB" strokeWidth={size*0.04}/>
-      {/* Diamond pattern */}
-      {[0.25,0.5,0.75].map(fy =>
-        [0.3,0.7].map(fx =>
-          <circle key={`${fx}${fy}`} cx={fx*W} cy={fy*H} r={size*0.06} fill="#3949AB" opacity="0.5"/>
-        )
-      )}
-      <text x={W*0.5} y={H*0.5} textAnchor="middle" dominantBaseline="middle"
+      <text x={W/2} y={H*0.5} textAnchor="middle" dominantBaseline="middle"
         fill="#5C6BC0" fontSize={size*0.35} fontWeight="900" fontFamily="Arial,sans-serif">?</text>
     </svg>
   );
 }
-
 
 function MeldGroup({ tiles, label, tileSize, accentColor }) {
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
@@ -1731,54 +1571,100 @@ export default function MahjongApp() {
   ];
 
   // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
-  // Rules confirmed by user:
-  // - Self-pick: all 3 losers pay the full score. East pays score + 1 extra.
-  // - Discard win: only discarder pays. If East discarded → East pays double.
+  // Dubai rules:
+  // - Self-pick: all 3 losers pay the full score. East SEAT pays score + 1 extra.
+  //   (East here = the player sitting in East seat, NOT whether they won or discarded)
+  // - Discard win: only discarder pays. If East SEAT discarded → pays double.
+  // NOTE: "East pays +1 / East pays ×2" refers to the East SEAT player specifically.
+  //       It does NOT mean the winner gets double — only the East seat payer is affected.
 
   const calcPayments = (score, winnerId, winType, discarderId) => {
     const winner = players.find(p => p.id === winnerId);
     if (!winner) return [];
-
-    const losers = players.filter(p => p.id !== winnerId);
-    const payments = []; // { fromId, toId, amount }
+    const payments = [];
 
     if (winType === "self_pick") {
-      losers.forEach(loser => {
-        const isEast = loser.windId === "E";
-        const amount = isEast ? score + 1 : score;
-        payments.push({ fromId: loser.id, toId: winnerId, amount });
+      // All 3 losers pay full score. East seat pays +1 extra.
+      players.filter(p => p.id !== winnerId).forEach(loser => {
+        const amt = loser.windId === "E" ? score + 1 : score;
+        payments.push({ fromId: loser.id, toId: winnerId, amount: amt });
       });
     } else {
-      // Discard win — only discarder pays
+      // Discard win — ONLY the discarder pays.
+      // If discarder is in East seat → pays double.
       const discarder = players.find(p => p.id === discarderId);
       if (!discarder) return [];
-      const isEastDiscard = discarder.windId === "E";
-      const amount = isEastDiscard ? score * 2 : score;
-      payments.push({ fromId: discarderId, toId: winnerId, amount });
+      const amt = discarder.windId === "E" ? score * 2 : score;
+      payments.push({ fromId: discarderId, toId: winnerId, amount: amt });
     }
 
     return payments;
   };
 
-  const applyPayments = (payments) => {
-    const deltas = {}; // playerId → net change
+  // ── DEALER ROTATION ───────────────────────────────────────────────────────────
+  // After each round:
+  // - If East (dealer) WON → East keeps the deal (no rotation)
+  // - If East did NOT win → deal passes to next seat (E→S→W→N→E)
+  // Round wind advances one full rotation through all four players.
+  const WIND_ORDER = ["E","S","W","N"];
+
+  const rotateDealerIfNeeded = (winnerId, newPlayers) => {
+    const winner = newPlayers.find(p => p.id === winnerId);
+    const eastPlayer = newPlayers.find(p => p.windId === "E");
+    
+    // If East won — no rotation, East keeps deal
+    if (winner && winner.windId === "E") return { rotatedPlayers: newPlayers, newRoundWind: roundWind };
+
+    // Rotate all seats: E→N, S→E, W→S, N→W (anti-clockwise shift)
+    const rotated = newPlayers.map(p => {
+      const idx = WIND_ORDER.indexOf(p.windId);
+      const nextWind = WIND_ORDER[(idx - 1 + 4) % 4];
+      return { ...p, windId: nextWind };
+    });
+
+    // Check if we've completed a full round (new East was previously North)
+    // i.e. the player who just became East was North before rotation
+    const newEast = rotated.find(p => p.windId === "E");
+    const origWind = newPlayers.find(p => p.id === newEast?.id)?.windId;
+    
+    // Advance round wind when we complete a full cycle (East returns to original East)
+    const originalEast = players.find(p => p.windId === "E");
+    const newEastIsOriginal = newEast?.id === originalEast?.id;
+    // Actually: advance round wind when the ORIGINAL East seat player gets deal back
+    // For simplicity: advance round wind after 4 rotations (track via round number)
+    const windIdx = WIND_ORDER.indexOf(roundWind);
+    // Advance round wind every 4 rounds (one full deal rotation)
+    const newRoundWind = round % 4 === 0
+      ? WIND_ORDER[(windIdx + 1) % 4]
+      : roundWind;
+
+    return { rotatedPlayers: rotated, newRoundWind };
+  };
+
+  const applyPayments = (payments, winnerId) => {
+    const deltas = {};
     payments.forEach(({ fromId, toId, amount }) => {
       deltas[fromId] = (deltas[fromId] || 0) - amount;
       deltas[toId]   = (deltas[toId]   || 0) + amount;
     });
 
-    const newPlayers = players.map(p => ({
+    const updatedPlayers = players.map(p => ({
       ...p, score: p.score + (deltas[p.id] || 0)
     }));
+
     const entries = players.map(p => ({
       pid: p.id, name: p.name, delta: deltas[p.id] || 0
     }));
 
-    setRoundHistory(h => [...h, { round, entries, payments }]);
-    setPlayers(newPlayers);
+    // Rotate dealer
+    const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(winnerId, updatedPlayers);
+
+    setRoundHistory(h => [...h, { round, entries, payments, winnerId }]);
+    setPlayers(rotatedPlayers);
+    setRoundWind(newRoundWind);
     setRound(r => r + 1);
     setPendingPayment(null);
-    setPendingScore(null);  // ← clears the payment panel completely
+    setPendingScore(null);
   };
 
   const handleWizardScore = (score) => {
@@ -1839,40 +1725,41 @@ export default function MahjongApp() {
 
             {/* ── GAME SETUP PANEL ── */}
             {showSetup && (
-              <div style={{background:"#1A1712",borderRadius:16,border:`1.5px solid ${game.color}50`,padding:18,marginBottom:18}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <div style={{fontSize:14,fontWeight:700,color:"#F0E8DC"}}>🎲 Game Setup</div>
-                  <button onClick={()=>setShowSetup(false)} style={{background:"none",border:"none",color:"rgba(200,180,160,0.4)",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+              <div style={{background:"#1A1712",borderRadius:16,border:`1.5px solid ${game.color}60`,padding:18,marginBottom:18}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontSize:16,fontWeight:700,color:"#F0E8DC"}}>🎲 Player Setup</div>
+                  <button onClick={()=>setShowSetup(false)} style={{background:"none",border:"none",color:"rgba(200,180,160,0.4)",fontSize:20,cursor:"pointer",lineHeight:1,padding:"0 4px"}}>✕</button>
                 </div>
+                <div style={{fontSize:12,color:"rgba(200,180,160,0.4)",marginBottom:16}}>Enter names and assign wind seats</div>
 
-                {/* Player name + wind editors */}
-                {players.map(p=>{
-                  const isEditing = editingPlayer===p.id;
+                {players.map(p => {
                   const wInfo = windLabel(p.windId);
                   return (
-                    <div key={p.id} style={{marginBottom:10}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                        <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                        {isEditing ? (
-                          <input autoFocus defaultValue={p.name}
-                            onBlur={e=>{setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,name:e.target.value||x.name}:x));setEditingPlayer(null);}}
-                            onKeyDown={e=>e.key==="Enter"&&e.target.blur()}
-                            style={{flex:1,background:"#0E0C0A",border:`1px solid ${p.color}`,borderRadius:8,padding:"6px 10px",color:"#F0E8DC",fontSize:14,fontWeight:600,outline:"none"}}/>
-                        ) : (
-                          <div style={{flex:1,fontSize:14,fontWeight:600,color:"#F0E8DC",cursor:"pointer"}} onClick={()=>setEditingPlayer(p.id)}>
-                            {p.name} <span style={{fontSize:11,color:"rgba(200,180,160,0.4)",fontWeight:400}}>tap to edit</span>
-                          </div>
-                        )}
+                    <div key={p.id} style={{marginBottom:14,padding:12,background:"#0E0C0A",borderRadius:12,border:`1px solid ${p.color}30`}}>
+                      {/* Name input — always editable */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                        <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                        <input
+                          value={p.name}
+                          onChange={e=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}
+                          placeholder={`Player ${p.id} name`}
+                          style={{flex:1,background:"transparent",border:"none",borderBottom:`1.5px solid ${p.color}60`,
+                            color:"#F0E8DC",fontSize:16,fontWeight:700,outline:"none",padding:"4px 2px",
+                            fontFamily:"inherit"}}
+                        />
                       </div>
                       {/* Wind seat picker */}
-                      <div style={{display:"flex",gap:6,paddingLeft:18}}>
+                      <div style={{display:"flex",gap:5}}>
                         {WINDS.map(w=>(
                           <button key={w.id} onClick={()=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,windId:w.id}:x))}
-                            style={{flex:1,padding:"7px 4px",borderRadius:8,border:`1.5px solid ${p.windId===w.id?p.color:"rgba(255,255,255,0.1)"}`,
-                              background:p.windId===w.id?`${p.color}25`:"transparent",cursor:"pointer",
-                              display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                            <span style={{fontSize:15}}>{w.emoji}</span>
-                            <span style={{fontSize:10,fontWeight:700,color:p.windId===w.id?p.color:"rgba(200,180,160,0.4)"}}>{w.label}</span>
+                            style={{flex:1,padding:"7px 2px",borderRadius:8,
+                              border:`1.5px solid ${p.windId===w.id?p.color:"rgba(255,255,255,0.08)"}`,
+                              background:p.windId===w.id?`${p.color}30`:"transparent",
+                              cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                            <span style={{fontSize:16}}>{w.emoji}</span>
+                            <span style={{fontSize:9,fontWeight:700,
+                              color:p.windId===w.id?p.color:"rgba(200,180,160,0.35)",
+                              letterSpacing:0.5}}>{w.label.toUpperCase()}</span>
                           </button>
                         ))}
                       </div>
@@ -1881,7 +1768,7 @@ export default function MahjongApp() {
                 })}
 
                 {/* Round wind */}
-                <div style={{marginTop:14,paddingTop:14,borderTop:"0.5px solid rgba(255,255,255,0.08)"}}>
+                <div style={{paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.08)"}}>
                   <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Prevailing (Round) Wind</div>
                   <div style={{display:"flex",gap:6}}>
                     {WINDS.map(w=>(
@@ -1898,8 +1785,9 @@ export default function MahjongApp() {
                 </div>
 
                 <button onClick={()=>setShowSetup(false)}
-                  style={{marginTop:14,width:"100%",padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                  Save Setup ✓
+                  style={{marginTop:14,width:"100%",padding:13,background:game.color,border:"none",
+                    borderRadius:10,color:"#0E0C0A",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+                  Start Game ✓
                 </button>
               </div>
             )}
@@ -2048,10 +1936,25 @@ export default function MahjongApp() {
                     });
                   })()}
                 </div>
+                {/* Dealer rotation notice */}
+                {(() => {
+                  const winner = players.find(p=>p.id===pendingPayment.winnerId);
+                  const eastWon = winner?.windId === "E";
+                  return (
+                    <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+                      background:eastWon?"rgba(245,201,122,0.1)":"rgba(100,180,100,0.1)",
+                      border:`0.5px solid ${eastWon?"rgba(245,201,122,0.3)":"rgba(100,180,100,0.3)"}`,
+                      fontSize:12,color:eastWon?"#F5C97A":"#8FBC8F"}}>
+                      {eastWon
+                        ? "🎴 East won — dealer keeps the deal, seats stay the same"
+                        : "🔄 Dealer passes to next seat after this round"}
+                    </div>
+                  );
+                })()}
                 <div style={{display:"flex",gap:10,marginTop:12}}>
                   <button onClick={()=>{setPendingPayment(null);setPendingScore(null);}}
                     style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>Cancel</button>
-                  <button onClick={()=>applyPayments(pendingPayment.payments)}
+                  <button onClick={()=>applyPayments(pendingPayment.payments, pendingPayment.winnerId)}
                     style={{flex:2,padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                     Confirm & update scores ✓
                   </button>
@@ -2062,40 +1965,66 @@ export default function MahjongApp() {
             {/* ── SCOREBOARD ── */}
             <div style={{marginBottom:16}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase"}}>Scoreboard</div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  {/* Round wind indicator */}
-                  <div style={{fontSize:11,color:game.color,background:`${game.color}18`,border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"2px 8px",fontWeight:600}}>
-                    {windLabel(roundWind)?.emoji} {windLabel(roundWind)?.label} Round
+                <div>
+                  <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase"}}>Scoreboard · Round {round}</div>
+                  {/* Proactive dealer + wind status */}
+                  <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap"}}>
+                    {(() => {
+                      const dealer = players.find(p=>p.windId==="E");
+                      const rw = WINDS.find(w=>w.id===roundWind);
+                      return <>
+                        <div style={{fontSize:11,color:"#F5C97A",background:"rgba(245,201,122,0.12)",
+                          border:"0.5px solid rgba(245,201,122,0.3)",borderRadius:10,padding:"2px 8px",fontWeight:600}}>
+                          🎴 Dealer: {dealer?.name||"?"}
+                        </div>
+                        <div style={{fontSize:11,color:game.color,background:`${game.color}12`,
+                          border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"2px 8px",fontWeight:600}}>
+                          {rw?.emoji} {rw?.label} Round
+                        </div>
+                      </>;
+                    })()}
                   </div>
-                  <button onClick={()=>setShowSetup(v=>!v)}
-                    style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,color:"rgba(200,180,160,0.5)",fontSize:11,padding:"3px 8px",cursor:"pointer"}}>
-                    ⚙️ Setup
-                  </button>
                 </div>
+                <button onClick={()=>setShowSetup(v=>!v)}
+                  style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
+                    color:"rgba(200,180,160,0.5)",fontSize:11,padding:"4px 10px",cursor:"pointer",flexShrink:0}}>
+                  ⚙️ Setup
+                </button>
               </div>
               {sorted.map((p,i)=>{
                 const wInfo = windLabel(p.windId);
                 const isDealer = p.windId==="E";
+                const isRoundWind = p.windId===roundWind;
                 return (
-                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,
-                    background:i===0?`${p.color}18`:"#1A1712",
-                    border:i===0?`1px solid ${p.color}40`:"0.5px solid rgba(255,255,255,0.07)",
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,
+                    background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#1A1712",
+                    border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid rgba(255,255,255,0.07)",
                     borderRadius:12,padding:"11px 14px",marginBottom:8}}>
-                    <div style={{width:30,height:30,borderRadius:"50%",background:p.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
+                    <div style={{width:30,height:30,borderRadius:"50%",background:p.color,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
                       {i===0?"👑":i+1}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                        <span style={{fontSize:14,fontWeight:600,color:"#F0E8DC",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:110}}>{p.name}</span>
-                        <span style={{fontSize:11,color:p.color,background:`${p.color}20`,padding:"1px 7px",borderRadius:8,flexShrink:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                        <span style={{fontSize:14,fontWeight:700,color:"#F0E8DC",
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100}}>
+                          {p.name}
+                        </span>
+                        <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
+                          padding:"1px 6px",borderRadius:8,flexShrink:0}}>
                           {wInfo?.emoji} {wInfo?.label}
                         </span>
-                        {isDealer&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",padding:"1px 6px",borderRadius:6,fontWeight:700,flexShrink:0}}>DEALER</span>}
-                        {p.windId===roundWind&&<span style={{fontSize:10,color:game.color,background:`${game.color}15`,padding:"1px 6px",borderRadius:6,fontWeight:600,flexShrink:0}}>+1 wind</span>}
+                        {isDealer&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",
+                          padding:"1px 6px",borderRadius:6,fontWeight:700,flexShrink:0}}>DEALER</span>}
+                        {isRoundWind&&!isDealer&&<span style={{fontSize:10,color:game.color,
+                          background:`${game.color}15`,padding:"1px 6px",borderRadius:6,
+                          fontWeight:600,flexShrink:0}}>+1 wind</span>}
                       </div>
                     </div>
-                    <div style={{fontSize:22,fontWeight:700,color:p.score>=0?game.accent:"#E05050",flexShrink:0}}>
+                    <div style={{fontSize:22,fontWeight:700,
+                      color:p.score>0?game.accent:p.score<0?"#E05050":"rgba(200,180,160,0.4)",
+                      flexShrink:0}}>
                       {p.score>0?"+":""}{p.score}
                     </div>
                   </div>
@@ -2152,14 +2081,23 @@ export default function MahjongApp() {
                     <button onClick={fullReset} style={{background:"none",border:"0.5px solid rgba(220,80,80,0.4)",borderRadius:8,color:"#E05050",fontSize:11,padding:"3px 10px",cursor:"pointer"}}>New game</button>
                   </div>
                 </div>
-                {[...roundHistory].reverse().map(r=>(
+                {[...roundHistory].reverse().map(r=>{
+                  const winner = players.find(p=>p.id===r.winnerId);
+                  return (
                   <div key={r.round} style={{background:"#131109",borderRadius:10,border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginBottom:6}}>Round {r.round}</div>
-                    <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                      {r.entries.map(e=><span key={e.pid} style={{fontSize:13,color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"rgba(200,180,160,0.4)"}}>{e.name}: {e.delta>0?"+":""}{e.delta}</span>)}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                      <div style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</div>
+                      {winner&&<div style={{fontSize:11,color:game.accent,fontWeight:600}}>🏆 {winner.name}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                      {r.entries.map(e=><span key={e.pid} style={{fontSize:13,
+                        color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                        {e.name}: {e.delta>0?"+":""}{e.delta}
+                      </span>)}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
