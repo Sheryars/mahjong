@@ -1,74 +1,262 @@
 import { useState, useRef, useEffect } from "react";
-import { TILE_IMAGES } from "./tileImages.js";
 
-// ─── PHOTO TILE COMPONENT ─────────────────────────────────────────────────────
-// Uses real cropped photos from the user's actual tile set.
-// Falls back to styled SVG for flower tiles (not in the photo set).
-
-const SUIT_COLORS = {
-  man:"#C0392B", pin:"#1565C0", bam:"#1B5E20",
-  wind:"#4527A0", dragon:"#E65100", flower:"#AD1457", back:"#1A237E"
-};
+// ─── MAHJONG TILE SVG COMPONENT ───────────────────────────────────────────────
+// Clean, consistent SVG tiles. Ivory face, coloured artwork, English labels.
+// All 34 tile types share identical dimensions and border styling.
 
 function Tile({ suit, n, size = 44 }) {
-  const W = size, H = Math.round(size * 1.45);
-  const shadow = { filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.6))" };
+  const W = size;
+  const H = Math.round(size * 1.48);
+  const R = size * 0.1;   // corner radius
+  const shadow = "drop-shadow(0 2px 5px rgba(0,0,0,0.55))";
 
-  // Map suit+n to image key
-  const key = suit === "man"    ? `man_${n}`
-             : suit === "pin"    ? `pin_${n}`
-             : suit === "bam"    ? `bam_${n}`
-             : suit === "wind"   ? `wind_${n}`
-             : suit === "dragon" ? `dragon_${n}`
-             : null;
+  // Colours per suit
+  const C = {
+    man:"#C62828", pin:"#1565C0", bam:"#2E7D32",
+    wind:"#4527A0", dragon_R:"#C62828", dragon_G:"#2E7D32", dragon_W:"#455A64",
+    flower:"#AD1457"
+  };
 
-  const src = key ? TILE_IMAGES[key] : null;
+  // ── Shared tile shell ──────────────────────────────────────────────────────
+  // Bevel: light top-left edge, dark bottom-right for 3D feel
+  const Shell = ({ col, children }) => (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+      style={{display:"inline-block",verticalAlign:"middle",filter:shadow}}>
+      {/* Shadow base */}
+      <rect x={1} y={2} width={W-2} height={H-2} rx={R+1} fill="rgba(0,0,0,0.3)"/>
+      {/* Bottom-right dark bevel */}
+      <rect x={1} y={1} width={W-2} height={H-2} rx={R} fill="#B8A898"/>
+      {/* Top-left light bevel */}
+      <rect x={1} y={1} width={W-2} height={(H-2)*0.55} rx={R} fill="#EDE0CC"/>
+      {/* Main face */}
+      <rect x={W*0.07} y={H*0.05} width={W*0.86} height={H*0.9} rx={R*0.7} fill="#F5EDD8"/>
+      {/* Subtle inner shadow */}
+      <rect x={W*0.07} y={H*0.05} width={W*0.86} height={H*0.9} rx={R*0.7}
+        fill="none" stroke={col} strokeWidth={size*0.02} strokeOpacity="0.15"/>
+      {children}
+    </svg>
+  );
 
-  // Real photo tile
-  if (src) {
+  // ── Circle (Dot) pip layouts ───────────────────────────────────────────────
+  const pipLayouts = {
+    1:[[.5,.5]],
+    2:[[.5,.28],[.5,.72]],
+    3:[[.5,.21],[.5,.5],[.5,.79]],
+    4:[[.28,.28],[.72,.28],[.28,.72],[.72,.72]],
+    5:[[.28,.21],[.72,.21],[.5,.5],[.28,.79],[.72,.79]],
+    6:[[.28,.2],[.72,.2],[.28,.5],[.72,.5],[.28,.8],[.72,.8]],
+    7:[[.28,.18],[.72,.18],[.28,.47],[.72,.47],[.5,.32],[.28,.77],[.72,.77]],
+    8:[[.25,.16],[.5,.16],[.75,.16],[.25,.44],[.75,.44],[.25,.72],[.5,.72],[.75,.72]],
+    9:[[.22,.16],[.5,.16],[.78,.16],[.22,.44],[.5,.44],[.78,.44],[.22,.72],[.5,.72],[.78,.72]],
+  };
+
+  // ── CIRCLES (Dots) ─────────────────────────────────────────────────────────
+  if (suit === "pin") {
+    const col = C.pin;
+    const pips = pipLayouts[n] || [];
+    const fx = W*0.1, fy = H*0.07;
+    const fw = W*0.8, fh = H*0.79;
+    const r = n >= 8 ? fw*0.13 : n >= 6 ? fw*0.14 : n >= 4 ? fw*0.15 : fw*0.17;
     return (
-      <div style={{
-        display:"inline-block", verticalAlign:"middle",
-        width:W, height:H, borderRadius:Math.max(3,size*0.09),
-        overflow:"hidden", flexShrink:0,
-        ...shadow
-      }}>
-        <img src={src} alt={key} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-      </div>
+      <Shell col={col}>
+        {/* Number label top-left */}
+        <text x={W*0.17} y={H*0.095} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.19} fontWeight="900" fontFamily="Arial,sans-serif">{n}</text>
+        {/* Pips */}
+        {pips.map(([px,py],i) => (
+          <g key={i}>
+            <circle cx={fx+px*fw} cy={fy+py*fh} r={r} fill={i===4&&n===5?"#C62828":col}/>
+            <circle cx={fx+px*fw-r*0.28} cy={fy+py*fh-r*0.32} r={r*0.35} fill="rgba(255,255,255,0.4)"/>
+          </g>
+        ))}
+        {/* "DOT" label bottom */}
+        <text x={W*0.5} y={H*0.935} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.14} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.8" opacity="0.7">DOT</text>
+      </Shell>
     );
   }
 
-  // Flower tile — SVG fallback
-  if (suit === "flower") {
-    const emojis = ["🌸","🌺","🌼","🌻","🍀","🌿","🎋","🌱"];
-    const e = typeof n === "number" ? emojis[(n-1)%8] : "🌸";
+  // ── BAMBOO ─────────────────────────────────────────────────────────────────
+  if (suit === "bam") {
+    const col = C.bam;
+    // Stalk grid positions
+    const stalkLayouts = {
+      1:[[.5,.5]], 2:[[.32,.5],[.68,.5]], 3:[[.5,.26],[.5,.5],[.5,.74]],
+      4:[[.32,.26],[.68,.26],[.32,.74],[.68,.74]],
+      5:[[.32,.18],[.68,.18],[.5,.5],[.32,.82],[.68,.82]],
+      6:[[.32,.18],[.68,.18],[.32,.5],[.68,.5],[.32,.82],[.68,.82]],
+      7:[[.5,.12],[.32,.32],[.68,.32],[.32,.55],[.68,.55],[.32,.78],[.68,.78]],
+      8:[[.32,.12],[.68,.12],[.32,.35],[.68,.35],[.32,.58],[.68,.58],[.32,.81],[.68,.81]],
+      9:[[.2,.12],[.5,.12],[.8,.12],[.2,.43],[.5,.43],[.8,.43],[.2,.74],[.5,.74],[.8,.74]],
+    };
+    const pos = stalkLayouts[n] || [];
+    const fx = W*0.1, fy = H*0.1;
+    const fw = W*0.8, fh = H*0.74;
+    const sw = n >= 7 ? fw*0.18 : fw*0.22;
+    const sh = n >= 7 ? fh*0.17 : fh*0.22;
+    return (
+      <Shell col={col}>
+        <text x={W*0.17} y={H*0.095} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.19} fontWeight="900" fontFamily="Arial,sans-serif">{n}</text>
+        {pos.map(([px,py],i) => {
+          const cx = fx+px*fw, cy = fy+py*fh;
+          const stalkCol = i===2&&n===5?"#C62828":col;
+          return (
+            <g key={i}>
+              <rect x={cx-sw/2} y={cy-sh/2} width={sw} height={sh} rx={sw*0.38} fill={stalkCol}/>
+              {/* Joint ring */}
+              <rect x={cx-sw/2-0.5} y={cy-sh*0.06} width={sw+1} height={sh*0.18}
+                rx={sw*0.3} fill="rgba(0,0,0,0.18)"/>
+              {/* Highlight */}
+              <rect x={cx-sw*0.3} y={cy-sh*0.35} width={sw*0.22} height={sh*0.45}
+                rx={sw*0.12} fill="rgba(255,255,255,0.35)"/>
+            </g>
+          );
+        })}
+        <text x={W*0.5} y={H*0.935} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.14} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.8" opacity="0.7">BAM</text>
+      </Shell>
+    );
+  }
+
+  // ── CHARACTERS ─────────────────────────────────────────────────────────────
+  if (suit === "man") {
+    const col = C.man;
+    const nums = ["一","二","三","四","五","六","七","八","九"];
+    return (
+      <Shell col={col}>
+        {/* English number top */}
+        <text x={W*0.5} y={H*0.26} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.45} fontWeight="900" fontFamily="Arial Black,Arial,sans-serif"
+          letterSpacing="-1">{n}</text>
+        {/* CHR label */}
+        <text x={W*0.5} y={H*0.935} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.14} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.8" opacity="0.7">CHR</text>
+        {/* Decorative divider line */}
+        <line x1={W*0.15} y1={H*0.43} x2={W*0.85} y2={H*0.43}
+          stroke={col} strokeWidth={size*0.02} strokeOpacity="0.2"/>
+        {/* Chinese character below divider — decorative */}
+        <text x={W*0.5} y={H*0.67} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.3} fontWeight="700" opacity="0.55">{nums[n-1]}</text>
+      </Shell>
+    );
+  }
+
+  // ── WINDS ──────────────────────────────────────────────────────────────────
+  if (suit === "wind") {
+    const configs = {
+      E:{ col:C.wind,    bg:"#EDE7F6", letter:"E", full:"EAST",  char:"東" },
+      S:{ col:"#0277BD", bg:"#E1F5FE", letter:"S", full:"SOUTH", char:"南" },
+      W:{ col:"#4E342E", bg:"#EFEBE9", letter:"W", full:"WEST",  char:"西" },
+      N:{ col:"#1B5E20", bg:"#E8F5E9", letter:"N", full:"NORTH", char:"北" },
+    };
+    const cfg = configs[n] || configs.E;
     return (
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-        style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-        <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#C8B89A"/>
-        <rect x={size*0.07} y={size*0.07} width={W-size*0.14} height={H-size*0.14}
-          rx={size*0.07} fill="#FFF8F0"/>
-        <text x={W/2} y={H*0.44} textAnchor="middle" dominantBaseline="middle"
-          fontSize={size*0.4}>{e}</text>
-        <text x={W/2} y={H*0.82} textAnchor="middle" dominantBaseline="middle"
-          fill="#AD1457" fontSize={Math.max(5,size*0.15)} fontWeight="800"
-          fontFamily="Arial,sans-serif" letterSpacing="0.5">FLOWER</text>
+        style={{display:"inline-block",verticalAlign:"middle",filter:shadow}}>
+        <rect x={1} y={2} width={W-2} height={H-2} rx={R+1} fill="rgba(0,0,0,0.3)"/>
+        <rect x={1} y={1} width={W-2} height={H-2} rx={R} fill="#B8A898"/>
+        <rect x={1} y={1} width={W-2} height={(H-2)*0.55} rx={R} fill="#EDE0CC"/>
+        <rect x={W*0.07} y={H*0.05} width={W*0.86} height={H*0.9} rx={R*0.7} fill={cfg.bg}/>
+        {/* Coloured band */}
+        <rect x={W*0.07} y={H*0.22} width={W*0.86} height={H*0.52} rx={0} fill={cfg.col} opacity="0.1"/>
+        {/* Large letter */}
+        <text x={W*0.5} y={H*0.46} textAnchor="middle" dominantBaseline="middle"
+          fill={cfg.col} fontSize={size*0.52} fontWeight="900" fontFamily="Arial Black,Arial,sans-serif">{cfg.letter}</text>
+        {/* Full name */}
+        <text x={W*0.5} y={H*0.78} textAnchor="middle" dominantBaseline="middle"
+          fill={cfg.col} fontSize={size*0.14} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.5">{cfg.full}</text>
+        {/* WIND label */}
+        <text x={W*0.5} y={H*0.935} textAnchor="middle" dominantBaseline="middle"
+          fill={cfg.col} fontSize={size*0.13} fontWeight="700" fontFamily="Arial,sans-serif"
+          opacity="0.6">WIND</text>
       </svg>
     );
   }
 
-  // Face-down / unknown
+  // ── DRAGONS ────────────────────────────────────────────────────────────────
+  if (suit === "dragon") {
+    const configs = {
+      R:{ col:C.dragon_R, bg:"#FFEBEE", label:"RED",   symbol:"中", symCol:"#C62828" },
+      G:{ col:C.dragon_G, bg:"#E8F5E9", label:"GREEN", symbol:"發", symCol:"#2E7D32" },
+      W:{ col:C.dragon_W, bg:"#ECEFF1", label:"WHITE", symbol:"□", symCol:"#455A64" },
+    };
+    const cfg = configs[n] || configs.R;
+    const isW = n === "W";
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+        style={{display:"inline-block",verticalAlign:"middle",filter:shadow}}>
+        <rect x={1} y={2} width={W-2} height={H-2} rx={R+1} fill="rgba(0,0,0,0.3)"/>
+        <rect x={1} y={1} width={W-2} height={H-2} rx={R} fill="#B8A898"/>
+        <rect x={1} y={1} width={W-2} height={(H-2)*0.55} rx={R} fill="#EDE0CC"/>
+        <rect x={W*0.07} y={H*0.05} width={W*0.86} height={H*0.9} rx={R*0.7} fill={cfg.bg}/>
+        {/* Coloured top stripe */}
+        <rect x={W*0.07} y={H*0.05} width={W*0.86} height={H*0.14} rx={R*0.7} fill={cfg.col}/>
+        {/* Label in stripe */}
+        <text x={W*0.5} y={H*0.12} textAnchor="middle" dominantBaseline="middle"
+          fill="white" fontSize={size*0.15} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.5">{cfg.label}</text>
+        {/* Symbol - large */}
+        {isW ? (
+          <rect x={W*0.2} y={H*0.26} width={W*0.6} height={H*0.45}
+            rx={size*0.06} fill="none" stroke={cfg.symCol} strokeWidth={size*0.06}/>
+        ) : (
+          <text x={W*0.5} y={H*0.54} textAnchor="middle" dominantBaseline="middle"
+            fill={cfg.symCol} fontSize={size*0.5} fontWeight="900">{cfg.symbol}</text>
+        )}
+        {/* DRAGON label */}
+        <text x={W*0.5} y={H*0.935} textAnchor="middle" dominantBaseline="middle"
+          fill={cfg.col} fontSize={size*0.13} fontWeight="700" fontFamily="Arial,sans-serif"
+          opacity="0.7">DRAGON</text>
+      </svg>
+    );
+  }
+
+  // ── FLOWERS ────────────────────────────────────────────────────────────────
+  if (suit === "flower") {
+    const col = C.flower;
+    const emojis = ["🌸","🌺","🌼","🌻","🍀","🌿","🎋","🌱"];
+    const e = typeof n === "number" ? emojis[(n-1)%8] : "🌸";
+    return (
+      <Shell col={col}>
+        <text x={W*0.5} y={H*0.46} textAnchor="middle" dominantBaseline="middle"
+          fontSize={size*0.38}>{e}</text>
+        <text x={W*0.5} y={H*0.78} textAnchor="middle" dominantBaseline="middle"
+          fill={col} fontSize={size*0.14} fontWeight="800" fontFamily="Arial,sans-serif"
+          letterSpacing="0.5">FLOWER</text>
+        {typeof n==="number"&&(
+          <text x={W*0.5} y={H*0.93} textAnchor="middle" dominantBaseline="middle"
+            fill={col} fontSize={size*0.13} fontFamily="Arial,sans-serif" opacity="0.55">#{n}</text>
+        )}
+      </Shell>
+    );
+  }
+
+  // ── FACE DOWN ──────────────────────────────────────────────────────────────
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-      style={{display:"inline-block",verticalAlign:"middle",...shadow}}>
-      <rect x={0} y={0} width={W} height={H} rx={size*0.1} fill="#1A237E"/>
-      <rect x={W*0.1} y={H*0.08} width={W*0.8} height={H*0.84} rx={size*0.07}
-        fill="none" stroke="#3949AB" strokeWidth={size*0.04}/>
-      <text x={W/2} y={H*0.5} textAnchor="middle" dominantBaseline="middle"
-        fill="#5C6BC0" fontSize={size*0.35} fontWeight="900" fontFamily="Arial,sans-serif">?</text>
+      style={{display:"inline-block",verticalAlign:"middle",filter:shadow}}>
+      <rect x={1} y={2} width={W-2} height={H-2} rx={R+1} fill="rgba(0,0,0,0.3)"/>
+      <rect x={1} y={1} width={W-2} height={H-2} rx={R} fill="#1A237E"/>
+      {/* Diamond cross-hatch pattern */}
+      {[0.3,0.5,0.7].flatMap(fy=>[0.3,0.5,0.7].map(fx=>(
+        <circle key={`${fx}${fy}`} cx={fx*W} cy={fy*H} r={size*0.055} fill="#3949AB" opacity="0.6"/>
+      )))}
+      <rect x={W*0.1} y={H*0.07} width={W*0.8} height={H*0.86} rx={R*0.6}
+        fill="none" stroke="#5C6BC0" strokeWidth={size*0.04}/>
     </svg>
   );
 }
+
+// SUIT_COLORS referenced in scoring wizard chip colours
+const SUIT_COLORS = {
+  man:"#C62828", pin:"#1565C0", bam:"#2E7D32",
+  wind:"#4527A0", dragon:"#E65100", flower:"#AD1457"
+};
 
 function MeldGroup({ tiles, label, tileSize, accentColor }) {
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
@@ -1827,7 +2015,10 @@ export default function MahjongApp() {
                   <div style={{marginBottom:12}}>
                     <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>How did they win?</div>
                     <div style={{display:"flex",gap:8}}>
-                      {[{id:"self_pick",label:"Self Pick",emoji:"🤲",sub:"All 3 pay"},{id:"discard",label:"Discard Win",emoji:"♟️",sub:"Discarder pays"}].map(wt=>(
+                      {[
+                        {id:"self_pick", label:"Self Pick",    emoji:"🤲", sub:"All 3 pay full score. East pays +1 extra."},
+                        {id:"discard",   label:"Discard Win",  emoji:"♟️", sub:"Only discarder pays. East discarder pays ×2."},
+                      ].map(wt=>(
                         <button key={wt.id}
                           onClick={()=>setPendingScore(s=>({...s,_winType:wt.id,_discarderId:null}))}
                           style={{flex:1,padding:"10px 8px",borderRadius:12,
@@ -1846,21 +2037,25 @@ export default function MahjongApp() {
                 {/* Discarder picker */}
                 {pendingScore._winType==="discard" && (
                   <div style={{marginBottom:12}}>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who discarded the winning tile?</div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>Who discarded the winning tile?</div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.35)",marginBottom:8,lineHeight:1.5}}>
+                      Only this player pays. If they are East (Dealer) they pay double.
+                    </div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {players.filter(p=>p.id!==pendingScore._winnerId).map(p=>{
                         const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
                         const isEast = p.windId==="E";
+                        const isSelected = pendingScore._discarderId===p.id;
                         return (
                           <button key={p.id}
                             onClick={()=>setPendingScore(s=>({...s,_discarderId:p.id}))}
                             style={{padding:"7px 12px",borderRadius:20,
-                              border:`1.5px solid ${pendingScore._discarderId===p.id?p.color:"rgba(255,255,255,0.12)"}`,
-                              background:pendingScore._discarderId===p.id?`${p.color}25`:"transparent",
+                              border:`1.5px solid ${isSelected?p.color:"rgba(255,255,255,0.12)"}`,
+                              background:isSelected?`${p.color}25`:"transparent",
                               cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
                             <span style={{fontSize:13}}>{WEMOJI[p.windId]||"🀀"}</span>
-                            <span style={{fontSize:12,fontWeight:600,color:pendingScore._discarderId===p.id?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
-                            {isEast&&<span style={{fontSize:9,color:"#F5C97A",fontWeight:700}}>×2</span>}
+                            <span style={{fontSize:12,fontWeight:600,color:isSelected?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
+                            {isEast&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",padding:"1px 5px",borderRadius:6,fontWeight:700}}>Dealer ×2</span>}
                           </button>
                         );
                       })}
@@ -1903,12 +2098,23 @@ export default function MahjongApp() {
                   const to   = players.find(p=>p.id===pay.toId);
                   if(!from||!to) return null;
                   const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+                  // Explain why this amount
+                  const baseScore = pendingPayment.score;
+                  let reason = "";
+                  if(pay.amount === baseScore * 2)      reason = "East discard ×2";
+                  else if(pay.amount === baseScore + 1) reason = "East seat +1";
                   return (
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,
+                      padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
                       <div style={{flex:1}}>
-                        <span style={{fontSize:13,color:"#E05050",fontWeight:600}}>{WEMOJI[from.windId]} {from.name}</span>
-                        <span style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}> pays </span>
-                        <span style={{fontSize:13,color:"#8FBC8F",fontWeight:600}}>{WEMOJI[to.windId]} {to.name}</span>
+                        <span style={{fontSize:13,color:"#E05050",fontWeight:600}}>
+                          {WEMOJI[from.windId]} {from.name}
+                        </span>
+                        <span style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}> → </span>
+                        <span style={{fontSize:13,color:"#8FBC8F",fontWeight:600}}>
+                          {WEMOJI[to.windId]} {to.name}
+                        </span>
+                        {reason&&<div style={{fontSize:10,color:"rgba(200,180,160,0.35)",marginTop:1}}>{reason}</div>}
                       </div>
                       <div style={{fontSize:18,fontWeight:900,color:game.accent,flexShrink:0}}>
                         {pay.amount} pts
