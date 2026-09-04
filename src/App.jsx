@@ -1775,6 +1775,8 @@ const GAME_CATS = { dubai:DXB_CATS, taiwanese:[{id:"all",label:"All"},{id:"high"
 
 // ─── PERSISTENCE HELPERS ──────────────────────────────────────────────────────
 const STORAGE_KEY = "mahjong_companion_v2";
+const REGULARS_KEY = "mahjong_regulars_v1";
+const ARCHIVE_KEY = "mahjong_archive_v1";
 const WINDS = [
   { id:"E", label:"East",  emoji:"🀀", char:"東" },
   { id:"S", label:"South", emoji:"🀁", char:"南" },
@@ -1796,6 +1798,217 @@ function loadState() {
 }
 function saveState(s) {
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch{}
+}
+
+function isPlaceholderName(name) {
+  return !name || /^Player\s*\d+$/i.test(String(name).trim());
+}
+
+function loadRegulars() {
+  try {
+    const r = JSON.parse(localStorage.getItem(REGULARS_KEY) || "[]");
+    return Array.isArray(r) ? r.filter(n => typeof n === "string" && n.trim() && !isPlaceholderName(n)) : [];
+  } catch { return []; }
+}
+function saveRegulars(names) {
+  try { localStorage.setItem(REGULARS_KEY, JSON.stringify(names.slice(0, 16))); } catch {}
+}
+function rememberPlayers(players) {
+  const incoming = (players || []).map(p => String(p.name || "").trim()).filter(n => n && !isPlaceholderName(n));
+  if (!incoming.length) return;
+  const prev = loadRegulars();
+  saveRegulars([...incoming, ...prev.filter(n => !incoming.includes(n))]);
+}
+function playersFromRegulars() {
+  const names = loadRegulars();
+  return DEFAULT_PLAYERS.map((p, i) => ({ ...p, name: names[i] || p.name }));
+}
+
+function loadArchive() {
+  try {
+    const r = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || "[]");
+    return Array.isArray(r) ? r : [];
+  } catch { return []; }
+}
+function saveArchive(games) {
+  try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify((games || []).slice(0, 30))); } catch {}
+}
+function archiveNight({ players, round, roundHistory, roundWind, dealerStreak }) {
+  const snapshot = {
+    id: Date.now(),
+    endedAt: new Date().toISOString(),
+    players: (players || []).map(p => ({ id: p.id, name: p.name, score: p.score, color: p.color, windId: p.windId })),
+    rounds: (roundHistory || []).length,
+    lastRound: round,
+    roundWind,
+    dealerStreak: dealerStreak || 0,
+    history: (roundHistory || []).map(h => ({
+      id: h.id, type: h.type, round: h.round, label: h.label,
+      winnerId: h.winnerId, entries: h.entries,
+    })),
+  };
+  saveArchive([snapshot, ...loadArchive().filter(g => g.id !== snapshot.id)]);
+  rememberPlayers(players);
+  return snapshot;
+}
+
+function minimizeTransfers(players) {
+  const debtors = [];
+  const creditors = [];
+  (players || []).forEach(p => {
+    const score = Number(p.score) || 0;
+    if (score < 0) debtors.push({ ...p, left: -score });
+    else if (score > 0) creditors.push({ ...p, left: score });
+  });
+  const transfers = [];
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const pay = Math.min(debtors[i].left, creditors[j].left);
+    if (pay > 0) {
+      transfers.push({
+        fromId: debtors[i].id, toId: creditors[j].id,
+        fromName: debtors[i].name, toName: creditors[j].name,
+        amount: pay,
+      });
+      debtors[i].left -= pay;
+      creditors[j].left -= pay;
+    }
+    if (debtors[i].left <= 0) i += 1;
+    if (creditors[j].left <= 0) j += 1;
+  }
+  return transfers;
+}
+
+function historyLabel(r) {
+  if (!r) return "Hand";
+  if (r.type === "draw") return "Draw · no win";
+  if (r.type === "false_mj") return "False Mahjong";
+  if (r.type === "chase") return r.chaseKind === "suit" ? "Chasing suit" : "Chasing wind/dragon";
+  if (r.type === "gong") return "Concealed Gong";
+  if (r.type === "adjust") return "Manual adjust";
+  if (r.winnerId) return "Win";
+  return "Hand";
+}
+
+function formatEndedAt(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+      + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch { return ""; }
+}
+
+function PlayerPickRow({ players, selectedId, onPick, excludeId }) {
+  return (
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {players.filter(p => p.id !== excludeId).map(p => {
+        const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+        const sel = selectedId === p.id;
+        return (
+          <button key={p.id} type="button" onClick={() => onPick(p.id)}
+            style={{padding:"7px 12px",borderRadius:20,
+              border:`1.5px solid ${sel?p.color:"rgba(255,255,255,0.12)"}`,
+              background:sel?`${p.color}25`:"transparent",
+              cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            <span style={{fontSize:13}}>{WEMOJI[p.windId]||"🀀"}</span>
+            <span style={{fontSize:12,fontWeight:700,color:sel?p.color:"rgba(200,180,160,0.7)"}}>{p.name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+async function shareSettlementImage({ players, transfers, aedPerPoint, endedAt }) {
+  const W = 720, pad = 36;
+  const rowH = 46;
+  const transfersH = Math.max(transfers.length, 1) * 40;
+  const H = 220 + players.length * rowH + 70 + transfersH + 90;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0E0C0A";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#1A1712";
+  roundRect(ctx, 24, 24, W - 48, H - 48, 28);
+  ctx.fill();
+
+  ctx.fillStyle = "#C8923A";
+  ctx.font = "700 18px 'DM Sans', sans-serif";
+  ctx.fillText("MAHJONGCOMPANION · DUBAI STYLE", 56, 72);
+  ctx.fillStyle = "#F0E8DC";
+  ctx.font = "800 34px 'DM Sans', sans-serif";
+  ctx.fillText("Night settled", 56, 118);
+  ctx.fillStyle = "rgba(200,180,160,0.55)";
+  ctx.font = "500 18px 'DM Sans', sans-serif";
+  ctx.fillText(formatEndedAt(endedAt) || "Tonight", 56, 148);
+
+  const sorted = [...players].sort((a,b) => (b.score||0) - (a.score||0));
+  sorted.forEach((p, i) => {
+    const y = 186 + i * rowH;
+    ctx.fillStyle = p.color || "#C8923A";
+    ctx.beginPath(); ctx.arc(70, y, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#F0E8DC";
+    ctx.font = "700 22px 'DM Sans', sans-serif";
+    ctx.fillText(p.name, 92, y + 7);
+    const score = Number(p.score) || 0;
+    const label = (score > 0 ? "+" : "") + score;
+    ctx.fillStyle = score > 0 ? "#8FBC8F" : score < 0 ? "#E05050" : "rgba(200,180,160,0.45)";
+    ctx.textAlign = "right";
+    ctx.fillText(label, W - 56, y + 7);
+    ctx.textAlign = "left";
+  });
+
+  const t0 = 186 + sorted.length * rowH + 24;
+  ctx.fillStyle = "#C8923A";
+  ctx.font = "700 16px 'DM Sans', sans-serif";
+  ctx.fillText("WHO PAYS WHOM", 56, t0);
+  if (!transfers.length) {
+    ctx.fillStyle = "rgba(200,180,160,0.5)";
+    ctx.font = "500 20px 'DM Sans', sans-serif";
+    ctx.fillText("Even — nothing to settle", 56, t0 + 40);
+  } else {
+    transfers.forEach((t, i) => {
+      const y = t0 + 40 + i * 40;
+      const money = aedPerPoint > 0 ? `AED ${(t.amount * aedPerPoint).toFixed(0)}` : `${t.amount} pts`;
+      ctx.fillStyle = "#E8E0D5";
+      ctx.font = "600 20px 'DM Sans', sans-serif";
+      ctx.fillText(`${t.fromName}  →  ${t.toName}`, 56, y);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#F5C97A";
+      ctx.fillText(money, W - 56, y);
+      ctx.textAlign = "left";
+    });
+  }
+
+  const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+  if (!blob) throw new Error("Could not build image");
+  const file = new File([blob], "mahjong-settlement.png", { type: "image/png" });
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: "Mahjong night", text: "Tonight's settlement" });
+    return "shared";
+  }
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    return "copied";
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "mahjong-settlement.png"; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return "downloaded";
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 // ─── ROOM API HELPERS ─────────────────────────────────────────────────────────
@@ -1829,6 +2042,10 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
   const [showJoin, setShowJoin] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+  const [archive, setArchive] = useState(() => loadArchive());
+  const [openPastId, setOpenPastId] = useState(null);
+  const regulars = loadRegulars();
 
   const handleJoin = async () => {
     if (joinCode.length < 4) { setError("Enter a 4-character room code"); return; }
@@ -1881,6 +2098,13 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
               <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh local game on this device</div>
           </div>
         </button>
+
+        {regulars.length > 0 && !showPast && (
+          <div style={{padding:"10px 14px",background:"#1A1712",borderRadius:12,
+            border:"0.5px solid rgba(255,255,255,0.08)",fontSize:12,color:"rgba(200,180,160,0.55)"}}>
+            Regulars on this phone: <span style={{color:"#F0E8DC",fontWeight:600}}>{regulars.slice(0,4).join(" · ")}</span>
+          </div>
+        )}
 
         {/* Create shared room — resets everything */}
         <button onClick={onCreateRoom}
@@ -1937,6 +2161,64 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
         )}
       </div>
 
+      <button onClick={()=>setShowPast(v=>!v)}
+        style={{marginTop:22,background:"none",border:"none",color:"rgba(200,180,160,0.45)",
+          fontSize:13,fontWeight:600,cursor:"pointer"}}>
+        {showPast ? "Hide past nights" : archive.length ? `Past nights · ${archive.length}` : "Past nights"}
+      </button>
+
+      {showPast && (
+        <div style={{width:"100%",maxWidth:380,marginTop:12}}>
+          {archive.length === 0 ? (
+            <div style={{textAlign:"center",padding:"18px 12px",color:"rgba(200,180,160,0.4)",fontSize:13}}>
+              Finished nights will show up here after you tap End night.
+            </div>
+          ) : archive.map(g => {
+            const open = openPastId === g.id;
+            const ranked = [...(g.players||[])].sort((a,b)=>(b.score||0)-(a.score||0));
+            const winner = ranked[0];
+            return (
+              <div key={g.id} style={{background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.08)",
+                borderRadius:12,marginBottom:8,overflow:"hidden"}}>
+                <button onClick={()=>setOpenPastId(open?null:g.id)}
+                  style={{width:"100%",padding:"12px 14px",background:"none",border:"none",
+                    cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",gap:10}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>{formatEndedAt(g.endedAt)}</div>
+                    <div style={{fontSize:12,color:"rgba(200,180,160,0.45)",marginTop:2}}>
+                      {g.rounds||0} hand{(g.rounds||0)!==1?"s":""}
+                      {winner ? ` · ${winner.name} ${winner.score>0?"+":""}${winner.score}` : ""}
+                    </div>
+                  </div>
+                  <span style={{color:"rgba(200,180,160,0.35)",fontSize:12}}>{open?"▲":"▼"}</span>
+                </button>
+                {open && (
+                  <div style={{padding:"0 14px 12px"}}>
+                    {ranked.map(p=>(
+                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
+                        <span style={{fontSize:13,color:"rgba(200,180,160,0.75)"}}>{p.name}</span>
+                        <span style={{fontSize:13,fontWeight:700,color:p.score>0?"#8FBC8F":p.score<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                          {p.score>0?"+":""}{p.score}
+                        </span>
+                      </div>
+                    ))}
+                    <button onClick={()=>{
+                      const next = loadArchive().filter(x=>x.id!==g.id);
+                      saveArchive(next);
+                      setArchive(next);
+                    }}
+                      style={{marginTop:8,background:"none",border:"none",color:"#E05050",
+                        fontSize:12,cursor:"pointer",padding:0}}>
+                      Delete this night
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{marginTop:32,fontSize:11,color:"rgba(200,180,160,0.25)",textAlign:"center"}}>
         Saved on this phone
       </div>
@@ -1975,6 +2257,7 @@ function GuestView({ room, onLeave }) {
   const sorted = [...players].sort((a,b) => b.score - a.score);
   const dealer = players.find(p => p.windId === "E");
   const rw = WINDS.find(w => w.id === roundWind);
+  const dealerStreak = gameState.dealerStreak || 0;
 
   // Hands + cats for Dubai
   const allHands = GAME_HANDS[game.id] || [];
@@ -2022,7 +2305,7 @@ function GuestView({ room, onLeave }) {
           </div>}
           {dealer&&<div style={{fontSize:11,color:"#F5C97A",background:"rgba(245,201,122,0.12)",
             borderRadius:10,padding:"1px 8px",fontWeight:600,marginLeft:"auto"}}>
-            🎴 {dealer.name} deals
+            🎴 {dealer.name} deals{dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}
           </div>}
         </div>
         <style>{`@keyframes gpulse{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
@@ -2086,7 +2369,9 @@ function GuestView({ room, onLeave }) {
                       </span>
                       {isDealer&&<span style={{fontSize:10,color:"#F5C97A",
                         background:"rgba(245,201,122,0.15)",padding:"1px 6px",
-                        borderRadius:6,fontWeight:700}}>DEALER</span>}
+                        borderRadius:6,fontWeight:700}}>
+                        {dealerStreak>0 ? `DEALER · 連莊 ×${dealerStreak}` : "DEALER"}
+                      </span>}
                     </div>
                   </div>
                   <div style={{fontSize:24,fontWeight:900,
@@ -2104,13 +2389,13 @@ function GuestView({ room, onLeave }) {
                   textTransform:"uppercase",marginBottom:10}}>
                   History · {roundHistory.length} rounds
                 </div>
-                {[...roundHistory].reverse().slice(0,8).map(r=>{
+                {[...roundHistory].reverse().slice(0,8).map((r,i)=>{
                   const winner = players.find(p=>p.id===r.winnerId);
                   return (
-                    <div key={r.round} style={{background:"#131109",borderRadius:10,
+                    <div key={r.id || `${r.type||"h"}-${r.round}-${i}`} style={{background:"#131109",borderRadius:10,
                       border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</span>
+                        <span style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round} · {historyLabel(r)}</span>
                         {winner&&<span style={{fontSize:11,color:gameAccent,fontWeight:600}}>🏆 {winner.name}</span>}
                       </div>
                       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -2328,10 +2613,11 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
   const [activeGame, setActiveGame] = useState(GAMES[0]);
   const [tab, setTab] = useState("table");
-  const [players, setPlayers] = useState(saved?.players || DEFAULT_PLAYERS);
+  const [players, setPlayers] = useState(saved?.players || playersFromRegulars());
   const [round, setRound] = useState(saved?.round || 1);
   const [roundWind, setRoundWind] = useState(saved?.roundWind || "E");
   const [roundHistory, setRoundHistory] = useState(saved?.roundHistory || []);
+  const [dealerStreak, setDealerStreak] = useState(saved?.dealerStreak || 0);
   const [scoreInputs, setScoreInputs] = useState({});
   const [handFilter, setHandFilter] = useState("all");
   const [expandedHand, setExpandedHand] = useState(null);
@@ -2342,16 +2628,21 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [showScoreSheet, setShowScoreSheet] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
   const [shareNote, setShareNote] = useState("");
+  const [tableAction, setTableAction] = useState(null);
+  const [actionDraft, setActionDraft] = useState({});
+  const [aedPerPoint, setAedPerPoint] = useState("");
+  const [settleNote, setSettleNote] = useState("");
+  const [regulars, setRegulars] = useState(() => loadRegulars());
 
   // Persist locally
   useEffect(() => {
-    saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory });
-  }, [activeGame.id, players, round, roundWind, roundHistory]);
+    saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory, dealerStreak });
+  }, [activeGame.id, players, round, roundWind, roundHistory, dealerStreak]);
 
   // Sync to room if host
   useEffect(() => {
     if (!isHost || !room) return;
-    const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id };
+    const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id, dealerStreak };
     apiUpdateRoom(room.code, gameState).catch(()=>{});
   }, [players, round, roundWind, roundHistory]);
 
@@ -2371,7 +2662,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const addRound = () => {
     const entries = players.map(p=>({pid:p.id,name:p.name,delta:Number(scoreInputs[p.id]||0)}));
     const windsBefore = Object.fromEntries(players.map(p=>[p.id,p.windId]));
-    const newHistory = [...roundHistory, {round, entries, windsBefore, roundWindBefore: roundWind}];
+    const newHistory = [...roundHistory, {id:Date.now(), type:"adjust", round, entries, windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak}];
     const newPlayers = players.map(x=>({...x,score:x.score+Number(scoreInputs[x.id]||0)}));
     setRoundHistory(newHistory);
     setPlayers(newPlayers);
@@ -2385,17 +2676,20 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setPlayers(reset);
     setRoundHistory([]);
     setRound(1);
+    setDealerStreak(0);
     setScoreInputs({});
   };
 
   const fullReset = () => {
     if (!window.confirm("Start a new game? This clears names, seats, and scores.")) return;
-    setPlayers(DEFAULT_PLAYERS);
+    setPlayers(playersFromRegulars());
     setRoundHistory([]);
     setRound(1);
     setRoundWind("E");
+    setDealerStreak(0);
     setScoreInputs({});
     setShowSetup(true);
+    setRegulars(loadRegulars());
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -2508,12 +2802,114 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(winnerId, updatedPlayers);
 
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
-    setRoundHistory(h => [...h, { round, entries, payments, winnerId, windsBefore, roundWindBefore: roundWind }]);
+    const winner = players.find(p => p.id === winnerId);
+    const nextStreak = winner?.windId === "E" ? dealerStreak + 1 : 0;
+    setRoundHistory(h => [...h, { id: Date.now(), type: "win", round, entries, payments, winnerId, windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak }]);
     setPlayers(rotatedPlayers);
     setRoundWind(newRoundWind);
+    setDealerStreak(nextStreak);
     setRound(r => r + 1);
     setPendingPayment(null);
     setPendingScore(null);
+  };
+
+  const pushLedger = ({ type, deltas, bumpRound, keepEast, extra = {} }) => {
+    const entries = players.map(p => ({ pid: p.id, name: p.name, delta: Number(deltas[p.id] || 0) }));
+    const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
+    setPlayers(players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) })));
+    setRoundHistory(h => [...h, {
+      id: Date.now(), type, round, entries, windsBefore,
+      roundWindBefore: roundWind, dealerStreakBefore: dealerStreak, ...extra,
+    }]);
+    if (keepEast) setDealerStreak(s => s + 1);
+    if (bumpRound) setRound(r => r + 1);
+    setTableAction(null);
+    setActionDraft({});
+  };
+
+  const applyDraw = () => {
+    const deltas = Object.fromEntries(players.map(p => [p.id, 0]));
+    pushLedger({ type: "draw", deltas, bumpRound: true, keepEast: true });
+  };
+
+  const applyFalseMahjong = () => {
+    const who = actionDraft.whoId;
+    if (!who) return;
+    const others = players.filter(p => p.id !== who);
+    const total = DXB_SCORE.false_mahjong;
+    const base = Math.floor(total / others.length);
+    let rem = total - base * others.length;
+    const deltas = { [who]: -total };
+    others.forEach(p => {
+      const extra = rem > 0 ? 1 : 0;
+      rem -= extra;
+      deltas[p.id] = base + extra;
+    });
+    pushLedger({
+      type: "false_mj",
+      deltas,
+      bumpRound: true,
+      keepEast: true,
+      extra: { offenderId: who },
+    });
+  };
+
+  const applyChase = () => {
+    const { whoId, payeeId, chaseKind } = actionDraft;
+    if (!whoId || !payeeId || !chaseKind) return;
+    const amt = chaseKind === "suit" ? DXB_SCORE.chasing_suit : DXB_SCORE.chasing_wind_dragon;
+    pushLedger({
+      type: "chase",
+      deltas: { [whoId]: -amt, [payeeId]: amt },
+      bumpRound: false,
+      keepEast: false,
+      extra: { offenderId: whoId, payeeId, chaseKind },
+    });
+  };
+
+  const applyGongCash = () => {
+    const who = actionDraft.whoId;
+    if (!who) return;
+    const amt = 5;
+    const deltas = {};
+    players.forEach(p => {
+      if (p.id === who) deltas[p.id] = amt * (players.length - 1);
+      else deltas[p.id] = -amt;
+    });
+    pushLedger({
+      type: "gong",
+      deltas,
+      bumpRound: false,
+      keepEast: false,
+      extra: { gongerId: who },
+    });
+  };
+
+  const endNightAndReset = (goHome) => {
+    archiveNight({ players, round, roundHistory, roundWind, dealerStreak });
+    rememberPlayers(players);
+    setRegulars(loadRegulars());
+    const kept = players.map((p, i) => ({
+      ...DEFAULT_PLAYERS[i],
+      name: isPlaceholderName(p.name) ? (DEFAULT_PLAYERS[i]?.name || p.name) : p.name,
+      color: p.color,
+    }));
+    setPlayers(kept);
+    setRoundHistory([]);
+    setRound(1);
+    setRoundWind("E");
+    setDealerStreak(0);
+    setScoreInputs({});
+    setPendingPayment(null);
+    setPendingScore(null);
+    setTableAction(null);
+    setActionDraft({});
+    setShowSetup(true);
+    saveState({ gameId: activeGame.id, players: kept, round: 1, roundWind: "E", roundHistory: [], dealerStreak: 0 });
+    if (goHome) {
+      localStorage.removeItem(STORAGE_KEY);
+      if (onLeaveRoom) onLeaveRoom();
+    }
   };
 
   const undoLastHand = () => {
@@ -2526,10 +2922,13 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       return { ...p, score: p.score - (e?.delta || 0), windId: wind };
     }));
     if (last.roundWindBefore) setRoundWind(last.roundWindBefore);
-    setRound(last.round || Math.max(1, round - 1));
+    if (last.dealerStreakBefore !== undefined) setDealerStreak(last.dealerStreakBefore);
+    const midHand = last.type === "gong" || last.type === "chase";
+    if (!midHand) setRound(last.round || Math.max(1, round - 1));
     setRoundHistory(h => h.slice(0, -1));
     setPendingPayment(null);
     setPendingScore(null);
+    setTableAction(null);
   };
 
   const handleWizardScore = (score, meta = {}) => {
@@ -2612,6 +3011,37 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 </div>
                 <div style={{fontSize:12,color:"rgba(200,180,160,0.4)",marginBottom:16}}>Enter names and assign wind seats</div>
 
+                {regulars.length > 0 && (
+                  <div style={{marginBottom:14}}>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Saved regulars</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {regulars.map(name => {
+                        const used = players.some(p => p.name === name);
+                        return (
+                          <button key={name} type="button"
+                            onClick={() => {
+                              if (used) {
+                                setPlayers(pl => pl.map(x => x.name === name ? { ...x, name: `Player ${x.id}` } : x));
+                                return;
+                              }
+                              setPlayers(pl => {
+                                const empty = pl.find(x => isPlaceholderName(x.name));
+                                if (!empty) return pl;
+                                return pl.map(x => x.id === empty.id ? { ...x, name } : x);
+                              });
+                            }}
+                            style={{padding:"5px 10px",borderRadius:16,cursor:"pointer",
+                              border:`1px solid ${used?"#C8923A80":"rgba(255,255,255,0.12)"}`,
+                              background:used?"rgba(200,146,58,0.2)":"transparent",
+                              color:used?"#F5C97A":"rgba(200,180,160,0.7)",fontSize:12,fontWeight:600}}>
+                            {used ? `✓ ${name}` : name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {players.map(p => {
                   const wInfo = windLabel(p.windId);
                   return (
@@ -2664,7 +3094,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   </div>
                 </div>
 
-                <button onClick={()=>setShowSetup(false)}
+                <button onClick={()=>{ rememberPlayers(players); setRegulars(loadRegulars()); setShowSetup(false); }}
                   style={{marginTop:14,width:"100%",padding:13,background:game.color,border:"none",
                     borderRadius:10,color:"#0E0C0A",fontSize:15,fontWeight:700,cursor:"pointer"}}>
                   Start Game ✓
@@ -2874,6 +3304,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                         <div style={{fontSize:11,color:"#F5C97A",background:"rgba(245,201,122,0.12)",
                           border:"0.5px solid rgba(245,201,122,0.3)",borderRadius:10,padding:"2px 8px",fontWeight:600}}>
                           🎴 Dealer: {dealer?.name||"?"}
+                          {dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}
                         </div>
                         <div style={{fontSize:11,color:game.color,background:`${game.color}12`,
                           border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"2px 8px",fontWeight:600}}>
@@ -2924,7 +3355,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                           {wInfo?.emoji} {wInfo?.label}
                         </span>
                         {isDealer&&<span style={{fontSize:10,color:"#F5C97A",background:"rgba(245,201,122,0.15)",
-                          padding:"1px 6px",borderRadius:6,fontWeight:700,flexShrink:0}}>DEALER</span>}
+                          padding:"1px 6px",borderRadius:6,fontWeight:700,flexShrink:0}}>
+                          {dealerStreak>0 ? `DEALER · 連莊 ×${dealerStreak}` : "DEALER"}
+                        </span>}
                         {isRoundWind&&!isDealer&&<span style={{fontSize:10,color:game.color,
                           background:`${game.color}15`,padding:"1px 6px",borderRadius:6,
                           fontWeight:600,flexShrink:0}}>+1 wind</span>}
@@ -2940,27 +3373,224 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               })}
             </div>
 
-            {pendingScore === null && pendingPayment === null && !showSetup && (
+            {pendingScore === null && pendingPayment === null && !showSetup && !tableAction && (
               <div style={{marginBottom:16}}>
                 <button onClick={()=>setShowScoreSheet(true)}
                   style={{width:"100%",padding:15,background:game.color,border:"none",borderRadius:14,
                     color:"#0E0C0A",fontSize:16,fontWeight:800,cursor:"pointer"}}>
                   Score this hand
                 </button>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
+                  {[
+                    {id:"draw", label:"Draw / wall out", sub:"No one wins"},
+                    {id:"false_mj", label:"False Mahjong", sub:"−25 · dealer stays"},
+                    {id:"chase", label:"Chasing", sub:"−5 / −10"},
+                    {id:"gong", label:"Collect Gong", sub:"Concealed +5 each"},
+                  ].map(a=>(
+                    <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
+                      style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
+                        borderRadius:12,cursor:"pointer",textAlign:"left"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>{a.label}</div>
+                      <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2}}>{a.sub}</div>
+                    </button>
+                  ))}
+                </div>
                 <div style={{display:"flex",gap:10,marginTop:10}}>
                   {roundHistory.length>0 && (
                     <button onClick={undoLastHand}
                       style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(220,80,80,0.35)",
                         borderRadius:10,color:"#E05050",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                      Undo last hand
+                      Undo last
                     </button>
                   )}
                   <button onClick={()=>setShowAdjust(v=>!v)}
                     style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.12)",
                       borderRadius:10,color:"rgba(200,180,160,0.55)",fontSize:13,cursor:"pointer"}}>
-                    {showAdjust ? "Hide adjust" : "Adjust scores"}
+                    {showAdjust ? "Hide adjust" : "Adjust"}
+                  </button>
+                  <button onClick={()=>setTableAction("settle")}
+                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(200,146,58,0.4)",
+                      borderRadius:10,color:"#F5C97A",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                    End night
                   </button>
                 </div>
+              </div>
+            )}
+
+            {tableAction && tableAction !== "settle" && pendingScore === null && pendingPayment === null && (
+              <div style={{background:"#1A1712",borderRadius:14,border:"1.5px solid rgba(200,146,58,0.4)",
+                padding:16,marginBottom:16}}>
+                {tableAction==="draw" && (
+                  <>
+                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Draw / wall out</div>
+                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:14}}>
+                      No one won. Scores stay put. East keeps the deal and the 連莊 streak goes up. No extra points until the booklet says so.
+                    </div>
+                    <button onClick={applyDraw}
+                      style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,
+                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                      Record draw · East stays
+                    </button>
+                  </>
+                )}
+
+                {tableAction==="false_mj" && (
+                  <>
+                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>False Mahjong</div>
+                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
+                      Who called it? They pay {DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.
+                    </div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who</div>
+                    <PlayerPickRow players={players} selectedId={actionDraft.whoId} onPick={id=>setActionDraft(d=>({...d,whoId:id}))}/>
+                    <button onClick={applyFalseMahjong} disabled={!actionDraft.whoId}
+                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
+                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:actionDraft.whoId?"pointer":"default",
+                        opacity:actionDraft.whoId?1:0.45}}>
+                      Apply −{DXB_SCORE.false_mahjong} · dealer stays
+                    </button>
+                  </>
+                )}
+
+                {tableAction==="chase" && (
+                  <>
+                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Chasing</div>
+                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
+                      Mid-hand penalty. Seats and the round stay as they are.
+                    </div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who chased</div>
+                    <PlayerPickRow players={players} selectedId={actionDraft.whoId}
+                      onPick={id=>setActionDraft(d=>({...d,whoId:id,payeeId:d.payeeId===id?null:d.payeeId}))}/>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>What did they chase</div>
+                    <div style={{display:"flex",gap:8}}>
+                      {[
+                        {id:"wind_dragon", label:`Wind / dragon −${DXB_SCORE.chasing_wind_dragon}`},
+                        {id:"suit", label:`Suit −${DXB_SCORE.chasing_suit}`},
+                      ].map(k=>(
+                        <button key={k.id} onClick={()=>setActionDraft(d=>({...d,chaseKind:k.id}))}
+                          style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
+                            border:`1.5px solid ${actionDraft.chaseKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
+                            background:actionDraft.chaseKind===k.id?`${game.color}20`:"transparent",
+                            color:actionDraft.chaseKind===k.id?game.accent:"rgba(200,180,160,0.7)",
+                            fontSize:12,fontWeight:700}}>
+                          {k.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Who do they pay</div>
+                    <PlayerPickRow players={players} selectedId={actionDraft.payeeId} excludeId={actionDraft.whoId}
+                      onPick={id=>setActionDraft(d=>({...d,payeeId:id}))}/>
+                    <button onClick={applyChase} disabled={!actionDraft.whoId||!actionDraft.payeeId||!actionDraft.chaseKind}
+                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
+                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",
+                        opacity:(actionDraft.whoId&&actionDraft.payeeId&&actionDraft.chaseKind)?1:0.45}}>
+                      Apply chase
+                    </button>
+                  </>
+                )}
+
+                {tableAction==="gong" && (
+                  <>
+                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Collect concealed Gong</div>
+                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
+                      Booklet: concealed Gong collects 5 pts from each of the other three, immediately. Open Gong waits until the winning hand.
+                    </div>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who declared it</div>
+                    <PlayerPickRow players={players} selectedId={actionDraft.whoId} onPick={id=>setActionDraft(d=>({...d,whoId:id}))}/>
+                    <button onClick={applyGongCash} disabled={!actionDraft.whoId}
+                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
+                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",
+                        opacity:actionDraft.whoId?1:0.45}}>
+                      Collect 5 from each
+                    </button>
+                  </>
+                )}
+
+                <button onClick={()=>{setTableAction(null);setActionDraft({});}}
+                  style={{marginTop:8,width:"100%",padding:8,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",
+                    borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {tableAction==="settle" && (
+              <div style={{background:"#1A1712",borderRadius:14,border:"1.5px solid rgba(200,146,58,0.5)",
+                padding:16,marginBottom:16}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:4}}>End night</div>
+                <div style={{fontSize:13,color:"rgba(200,180,160,0.5)",marginBottom:14}}>
+                  Who owes whom, then save this night to this phone.
+                </div>
+                {[...players].sort((a,b)=>b.score-a.score).map(p=>(
+                  <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0"}}>
+                    <span style={{fontSize:14,color:"#F0E8DC",fontWeight:600}}>{p.name}</span>
+                    <span style={{fontSize:14,fontWeight:800,color:p.score>0?"#8FBC8F":p.score<0?"#E05050":"rgba(200,180,160,0.4)"}}>
+                      {p.score>0?"+":""}{p.score}
+                    </span>
+                  </div>
+                ))}
+                <div style={{marginTop:12,paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.08)"}}>
+                  <div style={{fontSize:11,color:game.color,letterSpacing:1.2,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>Who pays whom</div>
+                  {(() => {
+                    const transfers = minimizeTransfers(players);
+                    const rate = Number(aedPerPoint);
+                    if (!transfers.length) {
+                      return <div style={{fontSize:13,color:"rgba(200,180,160,0.45)"}}>Even — nothing to settle</div>;
+                    }
+                    return transfers.map((t,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",gap:10}}>
+                        <span style={{fontSize:13,color:"rgba(200,180,160,0.8)"}}>{t.fromName} → {t.toName}</span>
+                        <span style={{fontSize:13,fontWeight:800,color:game.accent}}>
+                          {t.amount} pts{rate>0 ? ` · AED ${(t.amount*rate).toFixed(0)}` : ""}
+                        </span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+                <div style={{marginTop:12,display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginBottom:4}}>AED per point (optional)</div>
+                    <input type="number" inputMode="decimal" placeholder="0" value={aedPerPoint}
+                      onChange={e=>setAedPerPoint(e.target.value)}
+                      style={{width:"100%",padding:"8px 10px",background:"#0E0C0A",border:"1px solid rgba(200,146,58,0.35)",
+                        borderRadius:8,color:"#F0E8DC",fontSize:14,outline:"none"}}/>
+                  </div>
+                </div>
+                {settleNote && <div style={{marginTop:8,fontSize:12,color:game.accent}}>{settleNote}</div>}
+                <button onClick={async()=>{
+                  try {
+                    const result = await shareSettlementImage({
+                      players, transfers: minimizeTransfers(players),
+                      aedPerPoint: Number(aedPerPoint) || 0,
+                      endedAt: new Date().toISOString(),
+                    });
+                    setSettleNote(result==="shared"?"Shared":result==="copied"?"Copied image":"Image downloaded");
+                    setTimeout(()=>setSettleNote(""), 2200);
+                  } catch(e) {
+                    setSettleNote(e.message || "Could not share");
+                  }
+                }}
+                  style={{width:"100%",marginTop:12,padding:11,background:"none",
+                    border:"0.5px solid rgba(200,146,58,0.45)",borderRadius:10,color:"#F5C97A",
+                    fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  Share settlement image
+                </button>
+                <div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={()=>endNightAndReset(false)}
+                    style={{flex:1,padding:12,background:game.color,border:"none",borderRadius:10,
+                      color:"#0E0C0A",fontSize:13,fontWeight:800,cursor:"pointer"}}>
+                    Save · new night
+                  </button>
+                  <button onClick={()=>endNightAndReset(true)}
+                    style={{flex:1,padding:12,background:"none",border:"0.5px solid rgba(255,255,255,0.14)",
+                      borderRadius:10,color:"rgba(200,180,160,0.7)",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                    Save · home
+                  </button>
+                </div>
+                <button onClick={()=>{setTableAction(null);setSettleNote("");}}
+                  style={{marginTop:8,width:"100%",padding:8,background:"none",border:"none",
+                    color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>
+                  Keep playing
+                </button>
               </div>
             )}
 
@@ -3013,12 +3643,13 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     <button onClick={fullReset} style={{background:"none",border:"0.5px solid rgba(220,80,80,0.4)",borderRadius:8,color:"#E05050",fontSize:11,padding:"3px 10px",cursor:"pointer"}}>New game</button>
                   </div>
                 </div>
-                {[...roundHistory].reverse().map(r=>{
+                {[...roundHistory].reverse().map((r,i)=>{
                   const winner = players.find(p=>p.id===r.winnerId);
+                  const title = historyLabel(r);
                   return (
-                  <div key={r.round} style={{background:"#131109",borderRadius:10,border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
+                  <div key={r.id || `${r.type||"h"}-${r.round}-${i}`} style={{background:"#131109",borderRadius:10,border:"0.5px solid rgba(255,255,255,0.06)",padding:"10px 14px",marginBottom:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                      <div style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round}</div>
+                      <div style={{fontSize:11,color:"rgba(200,180,160,0.4)"}}>Round {r.round} · {title}</div>
                       {winner&&<div style={{fontSize:11,color:game.accent,fontWeight:600}}>🏆 {winner.name}</div>}
                     </div>
                     <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
