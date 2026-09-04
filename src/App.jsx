@@ -364,11 +364,12 @@ const DXB_SCORE = {
 
 const DXB_QUESTIONS = [
 
-  // ── STEP 1: Win type + concealed in one question ──
+  // ── STEP 1: Win type — skipped if already chosen on the score sheet ──
   { id:"win_type", cat:"🏆 How did you win?",
     q:"Pick your win type",
     hint:"This determines your base points",
     type:"single",
+    skip:(ans)=>!!ans._sheetWinType,
     opts:[
       { id:"discard",          label:"Discard Win",          sub:"Only discarder pays",         emoji:"♟️",
         tiles:[{suit:"bam",n:5}] },
@@ -384,6 +385,27 @@ const DXB_QUESTIONS = [
         tiles:[] },
       { id:"heavenly",         label:"Heavenly Hand",        sub:"Dealer wins on deal · 100 pts", emoji:"☁️",
         tiles:[] },
+    ]
+  },
+
+  // Follow-up only when the sheet already picked self pick / discard
+  { id:"win_extra", cat:"🏆 How did you win?",
+    q:"Any special win?",
+    hint:"You already chose how they won. Pick None unless one of these rare bonuses applies.",
+    type:"single",
+    skip:(ans)=>!ans._sheetWinType,
+    opts:[
+      { id:"none",             label:"None",                    sub:"Keep the win you already picked", emoji:"✅", tiles:[] },
+      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+10 pts · All 3 pay",            emoji:"🌸",
+        hide:(ans)=>ans.win_type!=="self_pick",
+        tiles:[{suit:"flower",n:1}] },
+      { id:"seabed",           label:"Last Tile from Wall",     sub:"Seabed +20 pts",                 emoji:"🌊",
+        tiles:[{suit:"man",n:9}] },
+      { id:"within_7",         label:"Win within 7 tiles",      sub:"+50 pts",                        emoji:"⚡", tiles:[] },
+      { id:"earthly",          label:"Earthly Hand",            sub:"First East discard · 90 pts",    emoji:"🌍",
+        hide:(ans)=>ans.win_type!=="discard", tiles:[] },
+      { id:"heavenly",         label:"Heavenly Hand",           sub:"Dealer wins on deal · 100 pts",  emoji:"☁️",
+        hide:(ans)=>ans.win_type!=="self_pick", tiles:[] },
     ]
   },
 
@@ -527,13 +549,13 @@ const DXB_QUESTIONS = [
     q:"How many Dragon Pongs/Gongs?",
     hint:"Red 中, Green 發, White 白 — 2 pts each",
     type:"number", min:0, max:3,
-    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special",
+    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
     tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"}]
   },
   { id:"dragon_combo", cat:"🐉 Dragons",
     q:"Dragon combination?",
     type:"single",
-    skip:(ans)=>Number(ans.pong_dragon)<2,
+    skip:(ans)=>ans.hand_type==="all_sheung"||Number(ans.pong_dragon)<2,
     opts:[
       { id:"none",  label:"No combo",      emoji:"❌", tiles:[] },
       { id:"little",label:"Little Dragon", sub:"2 pongs + dragon pair · +20 pts", emoji:"🐉",
@@ -546,27 +568,27 @@ const DXB_QUESTIONS = [
     q:"How many Wind Pongs/Gongs?",
     hint:"1 pt each + 1 bonus if it's your seat wind + 1 bonus if it's the round wind",
     type:"number", min:0, max:4,
-    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special",
+    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
     tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
   },
   { id:"wind_seat", cat:"💨 Winds",
     q:"Does a wind pong match the winner's seat?",
     hint:"+1 pt bonus if your seat wind tile is in a pong",
     type:"boolean",
-    skip:(ans)=>Number(ans.pong_wind)===0,
+    skip:(ans)=>ans.hand_type==="all_sheung"||Number(ans.pong_wind)===0,
     tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
   },
   { id:"wind_round", cat:"💨 Winds",
     q:"Does a wind pong match the round wind?",
     hint:"+1 pt bonus if the current round wind tile is in a pong",
     type:"boolean",
-    skip:(ans)=>Number(ans.pong_wind)===0,
+    skip:(ans)=>ans.hand_type==="all_sheung"||Number(ans.pong_wind)===0,
     tiles:[{suit:"wind",n:"S"},{suit:"wind",n:"S"},{suit:"wind",n:"S"}]
   },
   { id:"wind_combo", cat:"💨 Winds",
     q:"Wind combination?",
     type:"single",
-    skip:(ans)=>Number(ans.pong_wind)<2,
+    skip:(ans)=>ans.hand_type==="all_sheung"||Number(ans.pong_wind)<2,
     opts:[
       { id:"none",   label:"No combo",       emoji:"❌", tiles:[] },
       { id:"little3",label:"Little 3 Winds", sub:"2 pongs + wind pair · +15 pts",       emoji:"💨",
@@ -585,18 +607,21 @@ const DXB_QUESTIONS = [
     q:"How many Concealed Pongs?",
     hint:"Hidden triplets in your hand. Each Open Gong = 1 Concealed Pong",
     type:"number", min:0, max:5,
+    skip:(ans)=>ans.hand_type==="all_sheung",
     tiles:[{suit:"back",n:""},{suit:"pin",n:5},{suit:"pin",n:5},{suit:"back",n:""}]
   },
   { id:"open_gongs", cat:"🔒 Concealed sets",
     q:"How many Open Gongs?",
     hint:"4 of same tile, declared face-up · +1 pt each",
     type:"number", min:0, max:4,
+    skip:(ans)=>ans.hand_type==="all_sheung",
     tiles:[{suit:"bam",n:7},{suit:"bam",n:7},{suit:"bam",n:7},{suit:"bam",n:7}]
   },
   { id:"concealed_gongs", cat:"🔒 Concealed sets",
     q:"How many Concealed Gongs?",
     hint:"4 of same tile, kept hidden · +1 pt + collect 5 pts from each player immediately",
     type:"number", min:0, max:4,
+    skip:(ans)=>ans.hand_type==="all_sheung",
     tiles:[{suit:"back",n:""},{suit:"man",n:3},{suit:"man",n:3},{suit:"back",n:""}]
   },
 
@@ -651,7 +676,12 @@ const DXB_QUESTIONS = [
   },
 ];
 
-function calcDxbScore(ans) {
+function calcDxbScore(raw) {
+  const ans = raw.hand_type === "all_sheung"
+    ? { ...raw, pong_dragon:0, dragon_combo:"none", pong_wind:0, wind_seat:false, wind_round:false, wind_combo:"none", concealed_pongs:0, open_gongs:0, concealed_gongs:0 }
+    : raw.hand_type === "all_pong"
+      ? { ...raw, dragon_run:"none", step_up:"none" }
+      : raw;
   let pts = 0;
   const breakdown = [];
   const add = (n, label) => { if(n>0){pts+=n; breakdown.push({pts:n,label});} };
@@ -796,8 +826,30 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
   });
   const current = activeQs[step];
 
+  const sanitizeHandAnswers = (ans) => {
+    const next = { ...ans };
+    if (next.hand_type === "all_sheung") {
+      next.pong_dragon = 0;
+      next.dragon_combo = "none";
+      next.pong_wind = 0;
+      next.wind_seat = false;
+      next.wind_round = false;
+      next.wind_combo = "none";
+      next.concealed_pongs = 0;
+      next.open_gongs = 0;
+      next.concealed_gongs = 0;
+    }
+    if (next.hand_type === "all_pong") {
+      next.dragon_run = "none";
+      next.step_up = "none";
+    }
+    return next;
+  };
+
   const commitAnswer = (id, val) => {
-    const newAns = { ...answers, [id]: val };
+    let newAns = { ...answers, [id]: val };
+    if (id === "win_extra" && val && val !== "none") newAns.win_type = val;
+    if (id === "hand_type") newAns = sanitizeHandAnswers(newAns);
     setAnswers(newAns);
     setDualState({});
     if (step + 1 >= activeQs.length) {
@@ -904,7 +956,7 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
       {/* ── SINGLE SELECT ── */}
       {current.type === "single" && (
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
-          {current.opts.map(opt => {
+          {current.opts.filter(opt => !opt.hide || !opt.hide(answers)).map(opt => {
             const isPre = prefilled[current.id] === opt.id;
             return (
               <button key={opt.id} onClick={()=>commitAnswer(current.id, opt.id)}
@@ -975,9 +1027,11 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
       )}
 
       {/* ── DUAL BOOL — two yes/no toggles on one screen ── */}
-      {current.type === "dual_bool" && (
+      {current.type === "dual_bool" && (() => {
+        const visibleFields = current.fields.filter(f => !(f.id==="east" && typeof answers.east === "boolean"));
+        return (
         <div style={{marginTop:8}}>
-          {current.fields.map(f => (
+          {visibleFields.map(f => (
             <div key={f.id} style={{background:"#1A1712",borderRadius:12,padding:"12px 14px",marginBottom:8,
               border:"0.5px solid rgba(255,255,255,0.08)"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
@@ -1003,11 +1057,10 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
               </div>
             </div>
           ))}
-          {/* Confirm when all fields answered */}
-          {current.fields.every(f=>dualState[f.id]!==undefined) && (
+          {visibleFields.every(f=>dualState[f.id]!==undefined) && (
             <button onClick={()=>{
               const merged = {...answers};
-              current.fields.forEach(f=>{ merged[f.id]=dualState[f.id]; });
+              visibleFields.forEach(f=>{ merged[f.id]=dualState[f.id]; });
               setAnswers(merged);
               setDualState({});
               if(step+1>=activeQs.length){ setResult(calcDxbScore(merged)); setDone(true); }
@@ -1018,7 +1071,8 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
             </button>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── DUAL CHOICE — one bool + one select on one screen ── */}
       {current.type === "dual_choice" && (
@@ -1166,13 +1220,15 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
 
   // Merge AI prefill with wind-aware answers for selected winner
   const buildWindPrefill = (base, winnerId) => {
-    const winner = players.find(p => p.id === winnerId);
-    if (!winner) return base;
-    return {
+    const withWin = {
       ...base,
+      ...(selectedWinType ? { win_type: selectedWinType, _sheetWinType: true } : {}),
+    };
+    const winner = players.find(p => p.id === winnerId);
+    if (!winner) return withWin;
+    return {
+      ...withWin,
       east: winner.windId === "E",
-      wind_seat: winner.windId === roundWind,
-      wind_round: winner.windId === roundWind,
       _winnerName: winner.name,
       _winnerSeat: winner.windId,
       _roundWind: roundWind,
