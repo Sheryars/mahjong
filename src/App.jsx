@@ -540,6 +540,7 @@ const DXB_QUESTIONS = [
       { id:"pure",         label:"Pure Suit",          sub:"One suit only · +90 pts",            emoji:"🟢",
         tiles:[{suit:"pin",n:1},{suit:"pin",n:3},{suit:"pin",n:5},{suit:"pin",n:7},{suit:"pin",n:9}] },
       { id:"all_five",     label:"All 5 Suits",        sub:"3 suits + winds + dragons · +10 pts",emoji:"🌈",
+        hide:(ans)=>ans.hand_type==="all_sheung",
         tiles:[{suit:"man",n:1},{suit:"pin",n:1},{suit:"bam",n:1},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
     ]
   },
