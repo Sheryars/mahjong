@@ -839,7 +839,7 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
           <button onClick={reset} style={{flex:1,padding:11,background:"none",border:`0.5px solid ${accentColor}50`,borderRadius:10,color:accent,fontSize:13,fontWeight:600,cursor:"pointer"}}>New hand</button>
           <button onClick={()=>{ if(onDone) onDone(result.pts); }}
             style={{flex:2,padding:11,background:accentColor,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-            Go to Players tab →
+            Calculate who pays →
           </button>
         </div>
       </div>
@@ -1151,8 +1151,18 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
   const [capturedThumb, setCapturedThumb] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
   const [selectedWinner, setSelectedWinner] = useState(null);
+  const [selectedWinType, setSelectedWinType] = useState(null);
+  const [selectedDiscarder, setSelectedDiscarder] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  const finishScore = (score) => {
+    if (onScore) onScore(score, {
+      winnerId: selectedWinner,
+      winType: selectedWinType,
+      discarderId: selectedDiscarder,
+    });
+  };
 
   // Merge AI prefill with wind-aware answers for selected winner
   const buildWindPrefill = (base, winnerId) => {
@@ -1277,60 +1287,97 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
     }
   };
 
+  const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+
+  const winnerBlock = players.length > 0 && (
+    <div style={{background:"#1A1712",borderRadius:16,border:"0.5px solid rgba(255,255,255,0.08)",padding:16,marginBottom:12}}>
+      <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:10}}>Who won?</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        {players.map(p=>{
+          const isSel = selectedWinner===p.id;
+          return (
+            <button key={p.id} onClick={()=>{ setSelectedWinner(p.id); if(selectedDiscarder===p.id) setSelectedDiscarder(null); }}
+              style={{padding:"12px 10px",borderRadius:12,border:`1.5px solid ${isSel?p.color:"rgba(255,255,255,0.1)"}`,
+                background:isSel?`${p.color}25`:"transparent",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                <span style={{fontSize:16}}>{WINDS_MAP[p.windId]||"🀀"}</span>
+                <span style={{fontSize:14,fontWeight:700,color:isSel?p.color:"#F0E8DC"}}>{p.name}</span>
+              </div>
+              <div style={{fontSize:10,color:"rgba(200,180,160,0.45)"}}>
+                {p.windId==="E"?"East · Dealer":p.windId==="S"?"South":p.windId==="W"?"West":"North"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>How did they win?</div>
+      <div style={{display:"flex",gap:8,marginBottom: selectedWinType==="discard"?12:0}}>
+        {[
+          {id:"self_pick", label:"Self pick", sub:"All 3 pay. East seat +1"},
+          {id:"discard", label:"Discard", sub:"Only discarder pays. East ×2"},
+        ].map(wt=>{
+          const sel = selectedWinType===wt.id;
+          return (
+            <button key={wt.id} onClick={()=>{ setSelectedWinType(wt.id); if(wt.id!=="discard") setSelectedDiscarder(null); }}
+              style={{flex:1,padding:"12px 10px",borderRadius:12,textAlign:"left",cursor:"pointer",
+                border:`1.5px solid ${sel?game.color:"rgba(255,255,255,0.1)"}`,
+                background:sel?`${game.color}20`:"transparent"}}>
+              <div style={{fontSize:14,fontWeight:700,color:sel?game.accent:"#F0E8DC",marginBottom:3}}>{wt.label}</div>
+              <div style={{fontSize:10,color:"rgba(200,180,160,0.45)",lineHeight:1.4}}>{wt.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+      {selectedWinType==="discard" && (
+        <div>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Who discarded?</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {players.filter(p=>p.id!==selectedWinner).map(p=>{
+              const sel = selectedDiscarder===p.id;
+              return (
+                <button key={p.id} onClick={()=>setSelectedDiscarder(p.id)}
+                  style={{padding:"7px 12px",borderRadius:20,cursor:"pointer",
+                    border:`1.5px solid ${sel?p.color:"rgba(255,255,255,0.12)"}`,
+                    background:sel?`${p.color}25`:"transparent",
+                    display:"flex",alignItems:"center",gap:5}}>
+                  <span>{WINDS_MAP[p.windId]||"🀀"}</span>
+                  <span style={{fontSize:12,fontWeight:600,color:sel?p.color:"rgba(200,180,160,0.7)"}}>{p.name}</span>
+                  {p.windId==="E"&&<span style={{fontSize:10,color:"#F5C97A"}}>×2</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   // ── HOME ──
   if (mode === "home") return (
     <div>
-      <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai Style · AI Score Calculator</div>
+      {winnerBlock}
 
       <div style={{background:"#1A1712",borderRadius:16,border:`1.5px solid ${game.color}50`,padding:20,marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <span style={{fontSize:28}}>📷</span>
-          <div>
-            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>AI Photo Recognition</div>
-            <div style={{fontSize:11,color:game.accent,fontWeight:600}}>Powered by Claude Vision</div>
-          </div>
-        </div>
+        <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC",marginBottom:4}}>Photo of the hand</div>
+        <div style={{fontSize:12,color:game.accent,fontWeight:600,marginBottom:8}}>Optional · Claude fills the checklist</div>
         <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.6,marginBottom:16}}>
-          Take a photo of the winning hand. Claude will identify the tiles, detect flowers, dragons, suit type, special hands and more — then pre-fill the scoring questions automatically.
+          Photograph the winning tiles. You can still change every answer before the total is calculated.
         </div>
         {analysisError && (
           <div style={{background:"rgba(220,80,80,0.12)",border:"0.5px solid rgba(220,80,80,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#E05050"}}>{analysisError}</div>
         )}
         <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); }}
           style={{width:"100%",padding:13,background:game.color,border:"none",borderRadius:12,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-          Open Camera
+          Open camera
         </button>
       </div>
 
       <div style={{background:"#1A1712",borderRadius:16,border:"0.5px solid rgba(255,255,255,0.08)",padding:20}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <span style={{fontSize:28}}>🧮</span>
-          <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>Manual Scoring Wizard</div>
-        </div>
-        <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.6,marginBottom:10}}>Answer the scoring questions directly without a photo.</div>
-        {players.length > 0 && (
-          <div style={{marginBottom:12}}>
-            <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:6}}>Who won?</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {players.map(p=>{
-                const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
-                const isSel = selectedWinner===p.id;
-                return (
-                  <button key={p.id} onClick={()=>setSelectedWinner(p.id)}
-                    style={{padding:"5px 11px",borderRadius:20,border:`1.5px solid ${isSel?p.color:"rgba(255,255,255,0.1)"}`,
-                      background:isSel?`${p.color}25`:"transparent",cursor:"pointer",
-                      display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{fontSize:12}}>{WINDS_MAP[p.windId]||"🀀"}</span>
-                    <span style={{fontSize:11,fontWeight:isSel?700:500,color:isSel?p.color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC",marginBottom:6}}>Answer the questions</div>
+        <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.6,marginBottom:12}}>Skip the photo and score the hand yourself.</div>
         <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setAiResult(null); setMode("wizard"); }}
           style={{width:"100%",padding:12,background:"transparent",border:`1px solid ${game.color}55`,borderRadius:12,color:game.accent,fontSize:14,fontWeight:700,cursor:"pointer"}}>
-          Start Wizard
+          Start wizard
         </button>
       </div>
     </div>
@@ -1569,11 +1616,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
         prefilled={prefilledAnswers}
         aiResult={aiResult}
         onDone={(score)=>{
-          // Pass score up to parent — parent sets pendingScore state
-          // Don't switch tabs here — let the score result screen show first
-          // then user taps "Go to Players" which navigates
-          if (onScore) onScore(score);
-          // Reset wizard state but stay on camera tab briefly
+          finishScore(score);
           setMode("home");
           setAiResult(null);
           setCapturedThumb(null);
@@ -1805,7 +1848,7 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
       <div style={{marginBottom:32,textAlign:"center"}}>
         <div style={{fontSize:64,marginBottom:8}}>🀄</div>
         <div style={{fontSize:26,fontWeight:900,color:"#F0E8DC",letterSpacing:"-0.5px"}}>MahjongCompanion</div>
-        <div style={{fontSize:13,color:"rgba(200,180,160,0.4)",marginTop:4}}>Dubai Style · Taiwanese · HK · Riichi</div>
+        <div style={{fontSize:13,color:"#C8923A",marginTop:4,fontWeight:600,letterSpacing:0.4}}>Dubai Style</div>
       </div>
 
       {/* Options */}
@@ -1814,13 +1857,15 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
         {/* Continue local game — only if saved state exists */}
         {loadState() && (
           <button onClick={onContinueLocal}
-            style={{width:"100%",padding:"16px 20px",background:"#1A1712",
-              border:"1px solid rgba(200,146,58,0.4)",borderRadius:14,cursor:"pointer",
+            style={{width:"100%",padding:"18px 20px",background:"linear-gradient(135deg,#C8923A28,#F5C97A12)",
+              border:"1.5px solid #C8923A80",borderRadius:14,cursor:"pointer",
               display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
             <span style={{fontSize:28}}>📱</span>
             <div>
-              <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>Continue Local Game</div>
-              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Resume your saved game on this device</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#F5C97A"}}>Continue game</div>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.65)",marginTop:2}}>
+                Round {loadState().round || 1} · {(loadState().players||[]).map(x=>x.name).filter(n=>n && !/^Player \d+$/.test(n)).join(" · ") || "Saved on this phone"}
+              </div>
             </div>
           </button>
         )}
@@ -1832,8 +1877,8 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
             display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
           <span style={{fontSize:28}}>🎲</span>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>New Local Game</div>
-            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh game on this device · Clears saved data</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC"}}>New game</div>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh local game on this device</div>
           </div>
         </button>
 
@@ -1844,8 +1889,8 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
             display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
           <span style={{fontSize:28}}>🔗</span>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:"#F5C97A"}}>Create Shared Room</div>
-            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Fresh game · Share code with friends · Live scoreboard</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#F5C97A"}}>Create shared room</div>
+            <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Friends watch the scoreboard live</div>
           </div>
         </button>
 
@@ -1857,8 +1902,8 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
               display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
             <span style={{fontSize:28}}>👁️</span>
             <div>
-              <div style={{fontSize:15,fontWeight:700,color:"#88C0D0"}}>Join a Room</div>
-              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Enter a room code to watch live · Read-only view</div>
+              <div style={{fontSize:15,fontWeight:700,color:"#88C0D0"}}>Join a room</div>
+              <div style={{fontSize:12,color:"rgba(200,180,160,0.5)",marginTop:2}}>Read-only · enter a code</div>
             </div>
           </button>
         ) : (
@@ -1893,7 +1938,7 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
       </div>
 
       <div style={{marginTop:32,fontSize:11,color:"rgba(200,180,160,0.25)",textAlign:"center"}}>
-        Each device keeps its own local data · Rooms sync live via Supabase
+        Saved on this phone
       </div>
     </div>
   );
@@ -1937,7 +1982,7 @@ function GuestView({ room, onLeave }) {
   const filteredHands = allHands.filter(h => handFilter==="all" || h.cat===handFilter);
 
   const tabs = [
-    {id:"players", label:"Scores",  icon:"📊"},
+    {id:"players", label:"Table",  icon:"🀄"},
     {id:"hands",   label:"Hands",   icon:"📖"},
     {id:"ref",     label:"Rules",   icon:"📋"},
   ];
@@ -2017,7 +2062,7 @@ function GuestView({ room, onLeave }) {
             {sorted.length === 0 ? (
               <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(200,180,160,0.3)"}}>
                 <div style={{fontSize:40,marginBottom:12}}>⏳</div>
-                <div style={{fontSize:15}}>Waiting for host to start…</div>
+                <div style={{fontSize:15,color:"rgba(200,180,160,0.55)"}}>Waiting for the host to start…</div>
               </div>
             ) : sorted.map((p,i) => {
               const wInfo = WINDS.find(w=>w.id===p.windId);
@@ -2281,10 +2326,8 @@ function CreatingRoomScreen({ onCreated, onCancel }) {
 function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false }) {
   const saved = freshStart ? null : loadState();
 
-  const [activeGame, setActiveGame] = useState(
-    saved?.gameId ? (GAMES.find(g=>g.id===saved.gameId)||GAMES[0]) : GAMES[0]
-  );
-  const [tab, setTab] = useState("players");
+  const [activeGame, setActiveGame] = useState(GAMES[0]);
+  const [tab, setTab] = useState("table");
   const [players, setPlayers] = useState(saved?.players || DEFAULT_PLAYERS);
   const [round, setRound] = useState(saved?.round || 1);
   const [roundWind, setRoundWind] = useState(saved?.roundWind || "E");
@@ -2292,11 +2335,13 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [scoreInputs, setScoreInputs] = useState({});
   const [handFilter, setHandFilter] = useState("all");
   const [expandedHand, setExpandedHand] = useState(null);
-  const [showGamePicker, setShowGamePicker] = useState(false);
   const [pendingScore, setPendingScore] = useState(null);
-  const [pendingPayment, setPendingPayment] = useState(null); // { score, payments[], winnerId }
-  const [editingPlayer, setEditingPlayer] = useState(null); // player id being edited
+  const [pendingPayment, setPendingPayment] = useState(null);
+  const [editingPlayer, setEditingPlayer] = useState(null);
   const [showSetup, setShowSetup] = useState(freshStart || !saved);
+  const [showScoreSheet, setShowScoreSheet] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [shareNote, setShareNote] = useState("");
 
   // Persist locally
   useEffect(() => {
@@ -2325,7 +2370,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
   const addRound = () => {
     const entries = players.map(p=>({pid:p.id,name:p.name,delta:Number(scoreInputs[p.id]||0)}));
-    const newHistory = [...roundHistory, {round, entries}];
+    const windsBefore = Object.fromEntries(players.map(p=>[p.id,p.windId]));
+    const newHistory = [...roundHistory, {round, entries, windsBefore, roundWindBefore: roundWind}];
     const newPlayers = players.map(x=>({...x,score:x.score+Number(scoreInputs[x.id]||0)}));
     setRoundHistory(newHistory);
     setPlayers(newPlayers);
@@ -2334,6 +2380,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   const resetScores = () => {
+    if (!window.confirm("Reset all scores and history? Names and seats stay.")) return;
     const reset = players.map(x=>({...x,score:0}));
     setPlayers(reset);
     setRoundHistory([]);
@@ -2342,6 +2389,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   const fullReset = () => {
+    if (!window.confirm("Start a new game? This clears names, seats, and scores.")) return;
     setPlayers(DEFAULT_PLAYERS);
     setRoundHistory([]);
     setRound(1);
@@ -2365,10 +2413,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   const tabs=[
-    {id:"players",label:"Players",icon:"👥"},
-    {id:"camera",label:"Score",icon:"🀄"},
+    {id:"table",label:"Table",icon:"🀄"},
     {id:"hands",label:"Hands",icon:"📖"},
-    ...(isDXB?[{id:"ref",label:"Rules",icon:"📋"}]:[]),
+    {id:"ref",label:"Rules",icon:"📋"},
   ];
 
   // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
@@ -2460,7 +2507,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     // Rotate dealer
     const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(winnerId, updatedPlayers);
 
-    setRoundHistory(h => [...h, { round, entries, payments, winnerId }]);
+    const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
+    setRoundHistory(h => [...h, { round, entries, payments, winnerId, windsBefore, roundWindBefore: roundWind }]);
     setPlayers(rotatedPlayers);
     setRoundWind(newRoundWind);
     setRound(r => r + 1);
@@ -2468,14 +2516,32 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setPendingScore(null);
   };
 
-  const handleWizardScore = (score) => {
-    // Set pending score for payment flow — don't switch tab here
-    // (switching tab while wizard is mounted causes blank screen)
-    // Instead show a persistent banner — user taps Players tab themselves
-    setPendingScore({ pts: score, _winnerId: null, _winType: null, _discarderId: null });
+  const undoLastHand = () => {
+    if (!roundHistory.length) return;
+    if (!window.confirm("Undo the last hand?")) return;
+    const last = roundHistory[roundHistory.length - 1];
+    setPlayers(players.map(p => {
+      const e = (last.entries || []).find(x => x.pid === p.id);
+      const wind = last.windsBefore?.[p.id] ?? p.windId;
+      return { ...p, score: p.score - (e?.delta || 0), windId: wind };
+    }));
+    if (last.roundWindBefore) setRoundWind(last.roundWindBefore);
+    setRound(last.round || Math.max(1, round - 1));
+    setRoundHistory(h => h.slice(0, -1));
     setPendingPayment(null);
-    // Small delay then switch — lets wizard's onDone finish unmounting cleanly
-    setTimeout(() => setTab("players"), 50);
+    setPendingScore(null);
+  };
+
+  const handleWizardScore = (score, meta = {}) => {
+    setShowScoreSheet(false);
+    setPendingScore({
+      pts: score,
+      _winnerId: meta.winnerId ?? null,
+      _winType: meta.winType ?? null,
+      _discarderId: meta.discarderId ?? null,
+    });
+    setPendingPayment(null);
+    setTab("table");
   };
 
   return (
@@ -2485,47 +2551,41 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       <div style={{padding:"16px 20px 12px",background:"linear-gradient(180deg,#1A1410 0%,#0E0C0A 100%)",borderBottom:"0.5px solid rgba(200,146,58,0.2)",position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
-            <div style={{fontSize:11,color:game.color,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>🀄 MahjongCompanion</div>
+            <div style={{fontSize:11,color:game.color,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>MahjongCompanion</div>
             <div style={{fontSize:18,fontWeight:700,color:"#F0E8DC",marginTop:2}}>Round {round}</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {/* Room code badge — tap to share */}
             {isHost && room && (
               <button
                 onClick={()=>{
-                  if(navigator.share) {
-                    navigator.share({ title:"Join my Mahjong game", text:`Join my game with code: ${room.code}`, url:window.location.href });
-                  } else {
+                  const share = () => {
                     navigator.clipboard?.writeText(room.code);
-                    alert(`Room code: ${room.code}\n\nShare this code with friends so they can join and watch the scoreboard live.`);
-                  }
+                    setShareNote("Code copied");
+                    setTimeout(()=>setShareNote(""), 1800);
+                  };
+                  if (navigator.share) {
+                    navigator.share({ title:"Join my Mahjong game", text:`Join my game with code: ${room.code}` }).catch(share);
+                  } else share();
                 }}
                 style={{background:`${game.color}20`,border:`1px solid ${game.color}50`,
                   borderRadius:10,padding:"5px 10px",color:game.accent,
                   fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:2}}>
-                🔗 {room.code}
+                {room.code}
               </button>
             )}
-            <button onClick={()=>setShowGamePicker(v=>!v)} style={{background:`${game.color}22`,border:`1px solid ${game.color}55`,borderRadius:20,padding:"6px 14px",color:game.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-              {game.name} ▾
-            </button>
+            <div style={{background:`${game.color}18`,border:`1px solid ${game.color}40`,borderRadius:20,padding:"6px 12px",color:game.accent,fontSize:12,fontWeight:700}}>
+              Dubai Style
+            </div>
+            {onLeaveRoom && (
+              <button onClick={onLeaveRoom}
+                style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
+                  color:"rgba(200,180,160,0.5)",fontSize:11,padding:"5px 10px",cursor:"pointer"}}>
+                Home
+              </button>
+            )}
           </div>
         </div>
-        {showGamePicker&&(
-          <div style={{position:"absolute",top:"100%",right:20,left:20,background:"#1C1814",border:"0.5px solid rgba(200,146,58,0.3)",borderRadius:12,zIndex:100,overflow:"hidden",marginTop:4}}>
-            {GAMES.map(g=>(
-              <div key={g.id} onClick={()=>{setActiveGame(g);setShowGamePicker(false);setHandFilter("all");setExpandedHand(null);setTab("players");}}
-                style={{padding:"12px 16px",cursor:"pointer",background:activeGame.id===g.id?`${g.color}15`:"transparent",borderBottom:"0.5px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:g.color,flexShrink:0}}/>
-                <div>
-                  <div style={{fontSize:14,fontWeight:600,color:activeGame.id===g.id?g.accent:"#E8E0D5"}}>{g.name}</div>
-                  <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",marginTop:1}}>{g.sub}</div>
-                </div>
-                {g.id==="dubai"&&<span style={{marginLeft:"auto",fontSize:10,fontWeight:700,color:g.color,background:`${g.color}20`,padding:"2px 8px",borderRadius:10}}>YOUR GAME</span>}
-              </div>
-            ))}
-          </div>
-        )}
+        {shareNote && <div style={{marginTop:8,fontSize:11,color:game.accent}}>{shareNote}</div>}
       </div>
 
       {/* Tab Bar */}
@@ -2539,8 +2599,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
       <div style={{padding:"16px 16px 100px"}}>
 
-        {/* ── PLAYERS ── */}
-        {tab==="players"&&(
+        {/* ── TABLE ── */}
+        {tab==="table"&&(
           <div>
 
             {/* ── GAME SETUP PANEL ── */}
@@ -2845,10 +2905,20 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                        <span style={{fontSize:14,fontWeight:700,color:"#F0E8DC",
-                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100}}>
-                          {p.name}
-                        </span>
+                        {editingPlayer===p.id ? (
+                          <input autoFocus value={p.name}
+                            onChange={e=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}
+                            onBlur={()=>setEditingPlayer(null)}
+                            onKeyDown={e=>e.key==="Enter"&&setEditingPlayer(null)}
+                            style={{width:110,background:"transparent",border:"none",borderBottom:`1.5px solid ${p.color}`,
+                              color:"#F0E8DC",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit"}}/>
+                        ) : (
+                          <span onClick={()=>setEditingPlayer(p.id)}
+                            style={{fontSize:14,fontWeight:700,color:"#F0E8DC",
+                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100,cursor:"pointer"}}>
+                            {p.name}
+                          </span>
+                        )}
                         <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
                           padding:"1px 6px",borderRadius:8,flexShrink:0}}>
                           {wInfo?.emoji} {wInfo?.label}
@@ -2870,9 +2940,33 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               })}
             </div>
 
+            {pendingScore === null && pendingPayment === null && !showSetup && (
+              <div style={{marginBottom:16}}>
+                <button onClick={()=>setShowScoreSheet(true)}
+                  style={{width:"100%",padding:15,background:game.color,border:"none",borderRadius:14,
+                    color:"#0E0C0A",fontSize:16,fontWeight:800,cursor:"pointer"}}>
+                  Score this hand
+                </button>
+                <div style={{display:"flex",gap:10,marginTop:10}}>
+                  {roundHistory.length>0 && (
+                    <button onClick={undoLastHand}
+                      style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(220,80,80,0.35)",
+                        borderRadius:10,color:"#E05050",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                      Undo last hand
+                    </button>
+                  )}
+                  <button onClick={()=>setShowAdjust(v=>!v)}
+                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.12)",
+                      borderRadius:10,color:"rgba(200,180,160,0.55)",fontSize:13,cursor:"pointer"}}>
+                    {showAdjust ? "Hide adjust" : "Adjust scores"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ── ADD ROUND SCORES ── */}
-            <div style={{background:"#1A1712",borderRadius:14,border:`0.5px solid ${game.color}30`,padding:16,marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:600,color:game.accent,marginBottom:4}}>Add Round {round} scores</div>
+            {showAdjust && <div style={{background:"#1A1712",borderRadius:14,border:`0.5px solid ${game.color}30`,padding:16,marginBottom:16}}>
+              <div style={{fontSize:13,fontWeight:600,color:game.accent,marginBottom:4}}>Adjust Round {round} scores</div>
               <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginBottom:12}}>
                 Enter a score then tap <strong style={{color:"rgba(200,180,160,0.6)"}}>Pay</strong> to auto-calculate payments, or enter ± manually for each player.
               </div>
@@ -2904,7 +2998,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 style={{width:"100%",marginTop:8,padding:"11px",background:"rgba(255,255,255,0.06)",border:"0.5px solid rgba(255,255,255,0.12)",borderRadius:10,color:"rgba(200,180,160,0.7)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                 Confirm manual scores (no payments)
               </button>
-            </div>
+            </div>}
 
             {/* ── ROUND HISTORY ── */}
             {roundHistory.length>0&&(
@@ -2941,25 +3035,6 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
           </div>
         )}
 
-        {/* ── SCORE/CAMERA TAB ── */}
-        {tab==="camera"&&(
-          isDXB
-            ? <DxbCameraTab game={game} onScore={handleWizardScore} players={players} roundWind={roundWind}/>
-            : <div>
-                <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>{game.name} · Scoring</div>
-                <div style={{background:"#1A1712",borderRadius:14,border:`0.5px solid ${game.color}30`,padding:16,marginBottom:16}}>
-                  <div style={{display:"flex",gap:10,marginBottom:10}}>
-                    <div style={{background:`${game.color}22`,borderRadius:8,padding:"6px 10px",fontSize:11,color:game.accent,fontWeight:600}}>{game.tileHand}-tile hand</div>
-                    <div style={{background:`${game.color}22`,borderRadius:8,padding:"6px 10px",fontSize:11,color:game.accent,fontWeight:600}}>{game.unit}</div>
-                  </div>
-                  <div style={{fontSize:13,color:"rgba(200,180,160,0.7)",lineHeight:1.6}}>{game.description}</div>
-                </div>
-                <div style={{background:"#1A1712",borderRadius:12,border:`0.5px solid ${game.color}30`,padding:16}}>
-                  <div style={{fontSize:13,color:"rgba(200,180,160,0.6)",lineHeight:1.7}}>Scoring calculator for {game.name} coming soon. Switch to Dubai Style to use the full AI scoring wizard.</div>
-                  <button onClick={()=>setActiveGame(GAMES[0])} style={{marginTop:14,width:"100%",padding:10,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:13,fontWeight:600,cursor:"pointer"}}>Switch to Dubai Style →</button>
-                </div>
-              </div>
-        )}
 
         {/* ── HANDS ── */}
         {tab==="hands"&&(
@@ -3007,7 +3082,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
         )}
 
         {/* ── DUBAI RULES REFERENCE ── */}
-        {tab==="ref"&&isDXB&&(
+        {tab==="ref"&&(
           <div>
             <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
             <div style={{background:`${game.color}15`,border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:game.accent,lineHeight:1.6}}>
@@ -3028,6 +3103,27 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
         )}
 
       </div>
+
+      {showScoreSheet && (
+        <div style={{position:"fixed",inset:0,zIndex:80,background:"#0E0C0A",maxWidth:480,margin:"0 auto",
+          display:"flex",flexDirection:"column"}}>
+          <div style={{padding:"14px 16px 12px",borderBottom:"0.5px solid rgba(200,146,58,0.2)",
+            display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+            <div>
+              <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>Score this hand</div>
+              <div style={{fontSize:13,color:"rgba(200,180,160,0.45)",marginTop:2}}>Round {round}</div>
+            </div>
+            <button onClick={()=>setShowScoreSheet(false)}
+              style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
+                color:"rgba(200,180,160,0.6)",fontSize:13,padding:"6px 12px",cursor:"pointer"}}>
+              Close
+            </button>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
+            <DxbCameraTab game={game} onScore={handleWizardScore} players={players} roundWind={roundWind}/>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
