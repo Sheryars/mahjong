@@ -2835,9 +2835,19 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const applyFalseMahjong = () => {
     const who = actionDraft.whoId;
     if (!who) return;
+    const others = players.filter(p => p.id !== who);
+    const total = DXB_SCORE.false_mahjong;
+    const base = Math.floor(total / others.length);
+    let rem = total - base * others.length;
+    const deltas = { [who]: -total };
+    others.forEach(p => {
+      const extra = rem > 0 ? 1 : 0;
+      rem -= extra;
+      deltas[p.id] = base + extra;
+    });
     pushLedger({
       type: "false_mj",
-      deltas: { [who]: -DXB_SCORE.false_mahjong },
+      deltas,
       bumpRound: true,
       keepEast: true,
       extra: { offenderId: who },
@@ -3428,7 +3438,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   <>
                     <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>False Mahjong</div>
                     <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
-                      Who called it? They lose {DXB_SCORE.false_mahjong} pts. The hand ends and the dealer stays.
+                      Who called it? They pay {DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.
                     </div>
                     <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who</div>
                     <PlayerPickRow players={players} selectedId={actionDraft.whoId} onPick={id=>setActionDraft(d=>({...d,whoId:id}))}/>
