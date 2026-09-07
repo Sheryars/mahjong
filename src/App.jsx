@@ -2921,6 +2921,11 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [aedPerPoint, setAedPerPoint] = useState(() => loadAed());
   const [settleNote, setSettleNote] = useState("");
   const [regulars, setRegulars] = useState(() => loadRegulars());
+  const sheetScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (sheetScrollRef.current) sheetScrollRef.current.scrollTop = 0;
+  }, [tableAction, showScoreSheet]);
 
   // Persist locally
   useEffect(() => {
@@ -3920,7 +3925,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               Close
             </button>
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
+          <div ref={sheetScrollRef} style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
             {tableAction && tableAction !== "settle" ? (
               <TableExceptionPanel
                 type={tableAction}
