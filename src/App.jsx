@@ -342,6 +342,8 @@ const DXB_SCORE = {
   concealed_pong_5: 80, concealed_pong_5_self_no_gong: 100,
   // STEP 11 — gong
   open_gong: 1, concealed_gong: 1,
+  // Rules: concealed Gong collects 5 from each of the other three immediately.
+  concealed_gong_collect: 5,
   rob_gong: 10,
   self_draw_gong: 30,
   four_in_2: 5, four_in_3: 15, four_in_4: 20,
@@ -1443,10 +1445,10 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
           <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>No win this hand</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {[
-              {id:"draw", label:"Draw / wall out", sub:"East stays"},
-              {id:"false_mj", label:"False Mahjong", sub:"−25 · dealer stays"},
-              {id:"chase", label:"Chasing", sub:"−5 / −10"},
-              {id:"gong", label:"Collect Gong", sub:"5 from each"},
+              {id:"draw", label:"Draw / wall out", sub:"No one wins · East stays"},
+              {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
+              {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
+              {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
             ].map(a=>(
               <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
                 style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
@@ -1982,6 +1984,207 @@ function formatEndedAt(iso) {
     return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
       + " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   } catch { return ""; }
+}
+
+function tableExceptionMeta(type) {
+  if (type === "draw") return {
+    title: "Draw / wall out",
+    blurb: "No one won. Scores stay put. East keeps the deal and the 連莊 streak goes up. No extra points until the booklet says so.",
+    confirm: "Confirm draw · East stays",
+  };
+  if (type === "false_mj") return {
+    title: "False Mahjong",
+    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.`,
+    confirm: `Confirm −${DXB_SCORE.false_mahjong} · dealer stays`,
+  };
+  if (type === "chase") return {
+    title: "Chasing",
+    blurb: "Mid-hand penalty. Seats and the round stay as they are.",
+    confirm: "Confirm chase",
+  };
+  if (type === "gong") return {
+    title: "Collect concealed Gong",
+    blurb: `Concealed Gong collects ${DXB_SCORE.concealed_gong_collect} pts from each of the other three, immediately. Open Gong waits until the winning hand.`,
+    confirm: `Confirm collect ${DXB_SCORE.concealed_gong_collect} from each`,
+  };
+  return { title: "Table action", blurb: "", confirm: "Confirm" };
+}
+
+function buildExceptionLedger(type, draft, players) {
+  const empty = { ready: false, type, deltas: {}, payments: [], bumpRound: false, keepEast: false, extra: {} };
+  if (type === "draw") {
+    return {
+      ready: true, type,
+      deltas: Object.fromEntries(players.map(p => [p.id, 0])),
+      payments: [],
+      bumpRound: true, keepEast: true, extra: {},
+    };
+  }
+  if (type === "false_mj") {
+    const who = draft.whoId;
+    if (!who) return empty;
+    const others = players.filter(p => p.id !== who);
+    const total = DXB_SCORE.false_mahjong;
+    const base = Math.floor(total / Math.max(others.length, 1));
+    let rem = total - base * others.length;
+    const deltas = { [who]: -total };
+    const payments = [];
+    others.forEach(p => {
+      const extra = rem > 0 ? 1 : 0;
+      rem -= extra;
+      const amt = base + extra;
+      deltas[p.id] = amt;
+      payments.push({ fromId: who, toId: p.id, amount: amt });
+    });
+    return { ready: true, type, deltas, payments, bumpRound: true, keepEast: true, extra: { offenderId: who } };
+  }
+  if (type === "chase") {
+    const { whoId, payeeId, chaseKind } = draft;
+    if (!whoId || !payeeId || !chaseKind) return empty;
+    const amt = chaseKind === "suit" ? DXB_SCORE.chasing_suit : DXB_SCORE.chasing_wind_dragon;
+    return {
+      ready: true, type,
+      deltas: { [whoId]: -amt, [payeeId]: amt },
+      payments: [{ fromId: whoId, toId: payeeId, amount: amt }],
+      bumpRound: false, keepEast: false,
+      extra: { offenderId: whoId, payeeId, chaseKind },
+    };
+  }
+  if (type === "gong") {
+    const who = draft.whoId;
+    if (!who) return empty;
+    const amt = DXB_SCORE.concealed_gong_collect;
+    const deltas = {};
+    const payments = [];
+    players.forEach(p => {
+      if (p.id === who) deltas[p.id] = amt * (players.length - 1);
+      else {
+        deltas[p.id] = -amt;
+        payments.push({ fromId: p.id, toId: who, amount: amt });
+      }
+    });
+    return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { gongerId: who } };
+  }
+  return empty;
+}
+
+function ExceptionPaymentPreview({ players, ledger, game }) {
+  const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
+  return (
+    <div style={{marginTop:14,paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.08)"}}>
+      <div style={{fontSize:13,fontWeight:700,color:game.accent,marginBottom:10}}>Payment breakdown</div>
+      {ledger.payments.length === 0 ? (
+        <div style={{fontSize:13,color:"rgba(200,180,160,0.5)",marginBottom:8}}>No points move. Hand count goes up. East stays.</div>
+      ) : ledger.payments.map((pay,i) => {
+        const from = players.find(p => p.id === pay.fromId);
+        const to = players.find(p => p.id === pay.toId);
+        if (!from || !to) return null;
+        return (
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,
+            padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
+            <div style={{flex:1}}>
+              <span style={{fontSize:13,color:"#E05050",fontWeight:600}}>{WEMOJI[from.windId]} {from.name}</span>
+              <span style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}> → </span>
+              <span style={{fontSize:13,color:"#8FBC8F",fontWeight:600}}>{WEMOJI[to.windId]} {to.name}</span>
+            </div>
+            <div style={{fontSize:18,fontWeight:900,color:game.accent,flexShrink:0}}>{pay.amount} pts</div>
+          </div>
+        );
+      })}
+      <div style={{marginTop:8}}>
+        {players.map(p => {
+          const d = Number(ledger.deltas[p.id] || 0);
+          if (d === 0) return null;
+          return (
+            <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
+              <span style={{fontSize:12,color:"rgba(200,180,160,0.6)"}}>{p.name}</span>
+              <span style={{fontSize:13,fontWeight:700,color:d>0?"#8FBC8F":"#E05050"}}>{d>0?"+":""}{d}</span>
+            </div>
+          );
+        })}
+      </div>
+      {ledger.keepEast && (
+        <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+          background:"rgba(245,201,122,0.1)",border:"0.5px solid rgba(245,201,122,0.3)",
+          fontSize:12,color:"#F5C97A"}}>
+          🎴 East stays — dealer keeps the deal, 連莊 streak +1
+        </div>
+      )}
+      {!ledger.keepEast && !ledger.bumpRound && (
+        <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+          background:"rgba(100,180,100,0.1)",border:"0.5px solid rgba(100,180,100,0.3)",
+          fontSize:12,color:"#8FBC8F"}}>
+          Mid-hand — seats and the round stay as they are
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, onCancel }) {
+  const meta = tableExceptionMeta(type);
+  const ledger = buildExceptionLedger(type, draft, players);
+  return (
+    <div style={{background:"#1A1712",borderRadius:14,border:"1.5px solid rgba(200,146,58,0.4)",padding:16}}>
+      <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>{meta.title}</div>
+      <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>{meta.blurb}</div>
+
+      {type === "false_mj" && (
+        <>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who</div>
+          <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+        </>
+      )}
+
+      {type === "chase" && (
+        <>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who chased</div>
+          <PlayerPickRow players={players} selectedId={draft.whoId}
+            onPick={id=>setDraft(d=>({...d,whoId:id,payeeId:d.payeeId===id?null:d.payeeId}))}/>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>What did they chase</div>
+          <div style={{display:"flex",gap:8}}>
+            {[
+              {id:"wind_dragon", label:`Wind / dragon −${DXB_SCORE.chasing_wind_dragon}`},
+              {id:"suit", label:`Suit −${DXB_SCORE.chasing_suit}`},
+            ].map(k=>(
+              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,chaseKind:k.id}))}
+                style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
+                  border:`1.5px solid ${draft.chaseKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
+                  background:draft.chaseKind===k.id?`${game.color}20`:"transparent",
+                  color:draft.chaseKind===k.id?game.accent:"rgba(200,180,160,0.7)",
+                  fontSize:12,fontWeight:700}}>
+                {k.label}
+              </button>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Who do they pay</div>
+          <PlayerPickRow players={players} selectedId={draft.payeeId} excludeId={draft.whoId}
+            onPick={id=>setDraft(d=>({...d,payeeId:id}))}/>
+        </>
+      )}
+
+      {type === "gong" && (
+        <>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who declared it</div>
+          <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+        </>
+      )}
+
+      {ledger.ready && <ExceptionPaymentPreview players={players} ledger={ledger} game={game}/>}
+
+      <button onClick={()=>onConfirm(ledger)} disabled={!ledger.ready}
+        style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
+          color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:ledger.ready?"pointer":"default",
+          opacity:ledger.ready?1:0.45}}>
+        {meta.confirm}
+      </button>
+      <button type="button" onClick={onCancel}
+        style={{marginTop:8,width:"100%",padding:8,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",
+          borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>
+        Cancel
+      </button>
+    </div>
+  );
 }
 
 function PlayerPickRow({ players, selectedId, onPick, excludeId }) {
@@ -2914,62 +3117,16 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setActionDraft({});
   };
 
-  const applyDraw = () => {
-    const deltas = Object.fromEntries(players.map(p => [p.id, 0]));
-    pushLedger({ type: "draw", deltas, bumpRound: true, keepEast: true });
-  };
-
-  const applyFalseMahjong = () => {
-    const who = actionDraft.whoId;
-    if (!who) return;
-    const others = players.filter(p => p.id !== who);
-    const total = DXB_SCORE.false_mahjong;
-    const base = Math.floor(total / others.length);
-    let rem = total - base * others.length;
-    const deltas = { [who]: -total };
-    others.forEach(p => {
-      const extra = rem > 0 ? 1 : 0;
-      rem -= extra;
-      deltas[p.id] = base + extra;
-    });
+  const applyException = (ledger) => {
+    if (!ledger?.ready) return;
     pushLedger({
-      type: "false_mj",
-      deltas,
-      bumpRound: true,
-      keepEast: true,
-      extra: { offenderId: who },
+      type: ledger.type,
+      deltas: ledger.deltas,
+      bumpRound: ledger.bumpRound,
+      keepEast: ledger.keepEast,
+      extra: { ...ledger.extra, payments: ledger.payments },
     });
-  };
-
-  const applyChase = () => {
-    const { whoId, payeeId, chaseKind } = actionDraft;
-    if (!whoId || !payeeId || !chaseKind) return;
-    const amt = chaseKind === "suit" ? DXB_SCORE.chasing_suit : DXB_SCORE.chasing_wind_dragon;
-    pushLedger({
-      type: "chase",
-      deltas: { [whoId]: -amt, [payeeId]: amt },
-      bumpRound: false,
-      keepEast: false,
-      extra: { offenderId: whoId, payeeId, chaseKind },
-    });
-  };
-
-  const applyGongCash = () => {
-    const who = actionDraft.whoId;
-    if (!who) return;
-    const amt = 5;
-    const deltas = {};
-    players.forEach(p => {
-      if (p.id === who) deltas[p.id] = amt * (players.length - 1);
-      else deltas[p.id] = -amt;
-    });
-    pushLedger({
-      type: "gong",
-      deltas,
-      bumpRound: false,
-      keepEast: false,
-      extra: { gongerId: who },
-    });
+    setShowScoreSheet(false);
   };
 
   const endNightAndReset = (goHome) => {
@@ -3024,6 +3181,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
   const handleWizardScore = (score, meta = {}) => {
     setShowScoreSheet(false);
+    setTableAction(null);
+    setActionDraft({});
     setPendingScore({
       pts: score,
       _winnerId: meta.winnerId ?? null,
@@ -3474,9 +3633,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
                   {[
                     {id:"draw", label:"Draw / wall out", sub:"No one wins"},
-                    {id:"false_mj", label:"False Mahjong", sub:"−25 · dealer stays"},
-                    {id:"chase", label:"Chasing", sub:"−5 / −10"},
-                    {id:"gong", label:"Collect Gong", sub:"Concealed +5 each"},
+                    {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
+                    {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
+                    {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
                       style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
@@ -3508,99 +3667,17 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               </div>
             )}
 
-            {tableAction && tableAction !== "settle" && pendingScore === null && pendingPayment === null && (
-              <div style={{background:"#1A1712",borderRadius:14,border:"1.5px solid rgba(200,146,58,0.4)",
-                padding:16,marginBottom:16}}>
-                {tableAction==="draw" && (
-                  <>
-                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Draw / wall out</div>
-                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:14}}>
-                      No one won. Scores stay put. East keeps the deal and the 連莊 streak goes up. No extra points until the booklet says so.
-                    </div>
-                    <button onClick={applyDraw}
-                      style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,
-                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                      Record draw · East stays
-                    </button>
-                  </>
-                )}
-
-                {tableAction==="false_mj" && (
-                  <>
-                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>False Mahjong</div>
-                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
-                      Who called it? They pay {DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.
-                    </div>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who</div>
-                    <PlayerPickRow players={players} selectedId={actionDraft.whoId} onPick={id=>setActionDraft(d=>({...d,whoId:id}))}/>
-                    <button onClick={applyFalseMahjong} disabled={!actionDraft.whoId}
-                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
-                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:actionDraft.whoId?"pointer":"default",
-                        opacity:actionDraft.whoId?1:0.45}}>
-                      Apply −{DXB_SCORE.false_mahjong} · dealer stays
-                    </button>
-                  </>
-                )}
-
-                {tableAction==="chase" && (
-                  <>
-                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Chasing</div>
-                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
-                      Mid-hand penalty. Seats and the round stay as they are.
-                    </div>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who chased</div>
-                    <PlayerPickRow players={players} selectedId={actionDraft.whoId}
-                      onPick={id=>setActionDraft(d=>({...d,whoId:id,payeeId:d.payeeId===id?null:d.payeeId}))}/>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>What did they chase</div>
-                    <div style={{display:"flex",gap:8}}>
-                      {[
-                        {id:"wind_dragon", label:`Wind / dragon −${DXB_SCORE.chasing_wind_dragon}`},
-                        {id:"suit", label:`Suit −${DXB_SCORE.chasing_suit}`},
-                      ].map(k=>(
-                        <button key={k.id} onClick={()=>setActionDraft(d=>({...d,chaseKind:k.id}))}
-                          style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
-                            border:`1.5px solid ${actionDraft.chaseKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
-                            background:actionDraft.chaseKind===k.id?`${game.color}20`:"transparent",
-                            color:actionDraft.chaseKind===k.id?game.accent:"rgba(200,180,160,0.7)",
-                            fontSize:12,fontWeight:700}}>
-                          {k.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Who do they pay</div>
-                    <PlayerPickRow players={players} selectedId={actionDraft.payeeId} excludeId={actionDraft.whoId}
-                      onPick={id=>setActionDraft(d=>({...d,payeeId:id}))}/>
-                    <button onClick={applyChase} disabled={!actionDraft.whoId||!actionDraft.payeeId||!actionDraft.chaseKind}
-                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
-                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",
-                        opacity:(actionDraft.whoId&&actionDraft.payeeId&&actionDraft.chaseKind)?1:0.45}}>
-                      Apply chase
-                    </button>
-                  </>
-                )}
-
-                {tableAction==="gong" && (
-                  <>
-                    <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>Collect concealed Gong</div>
-                    <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>
-                      Booklet: concealed Gong collects 5 pts from each of the other three, immediately. Open Gong waits until the winning hand.
-                    </div>
-                    <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who declared it</div>
-                    <PlayerPickRow players={players} selectedId={actionDraft.whoId} onPick={id=>setActionDraft(d=>({...d,whoId:id}))}/>
-                    <button onClick={applyGongCash} disabled={!actionDraft.whoId}
-                      style={{width:"100%",marginTop:14,padding:12,background:game.color,border:"none",borderRadius:10,
-                        color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",
-                        opacity:actionDraft.whoId?1:0.45}}>
-                      Collect 5 from each
-                    </button>
-                  </>
-                )}
-
-                <button onClick={()=>{setTableAction(null);setActionDraft({});}}
-                  style={{marginTop:8,width:"100%",padding:8,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",
-                    borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>
-                  Cancel
-                </button>
+            {tableAction && tableAction !== "settle" && pendingScore === null && pendingPayment === null && !showScoreSheet && (
+              <div style={{marginBottom:16}}>
+                <TableExceptionPanel
+                  type={tableAction}
+                  draft={actionDraft}
+                  setDraft={setActionDraft}
+                  players={players}
+                  game={game}
+                  onConfirm={applyException}
+                  onCancel={()=>{setTableAction(null);setActionDraft({});}}
+                />
               </div>
             )}
 
@@ -3832,27 +3909,40 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
           <div style={{padding:"14px 16px 12px",borderBottom:"0.5px solid rgba(200,146,58,0.2)",
             display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
             <div>
-              <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>Score this hand</div>
+              <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>
+                {tableAction && tableAction !== "settle" ? tableExceptionMeta(tableAction).title : "Score this hand"}
+              </div>
               <div style={{fontSize:13,color:"rgba(200,180,160,0.45)",marginTop:2}}>Round {round}</div>
             </div>
-            <button onClick={()=>setShowScoreSheet(false)}
+            <button onClick={()=>{ setShowScoreSheet(false); setTableAction(null); setActionDraft({}); }}
               style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
                 color:"rgba(200,180,160,0.6)",fontSize:13,padding:"6px 12px",cursor:"pointer"}}>
               Close
             </button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
-            <DxbCameraTab
-              game={game}
-              onScore={handleWizardScore}
-              players={players}
-              roundWind={roundWind}
-              onTableAction={(id) => {
-                setShowScoreSheet(false);
-                setTableAction(id);
-                setActionDraft({});
-              }}
-            />
+            {tableAction && tableAction !== "settle" ? (
+              <TableExceptionPanel
+                type={tableAction}
+                draft={actionDraft}
+                setDraft={setActionDraft}
+                players={players}
+                game={game}
+                onConfirm={applyException}
+                onCancel={()=>{ setTableAction(null); setActionDraft({}); }}
+              />
+            ) : (
+              <DxbCameraTab
+                game={game}
+                onScore={handleWizardScore}
+                players={players}
+                roundWind={roundWind}
+                onTableAction={(id) => {
+                  setTableAction(id);
+                  setActionDraft({});
+                }}
+              />
+            )}
           </div>
         </div>
       )}
