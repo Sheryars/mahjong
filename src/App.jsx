@@ -1196,7 +1196,7 @@ function captureFrameAsBase64(videoEl) {
 
 // ─── DUBAI SCORING CAMERA TAB ─────────────────────────────────────────────────
 
-function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
+function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAction }) {
   const [mode, setMode] = useState("home");
   const [cameraActive, setCameraActive] = useState(false);
   const [analysing, setAnalysing] = useState(false);
@@ -1437,6 +1437,27 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E" }) {
           Start wizard
         </button>
       </div>
+
+      {onTableAction && (
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>No win this hand</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {[
+              {id:"draw", label:"Draw / wall out", sub:"East stays"},
+              {id:"false_mj", label:"False Mahjong", sub:"−25 · dealer stays"},
+              {id:"chase", label:"Chasing", sub:"−5 / −10"},
+              {id:"gong", label:"Collect Gong", sub:"5 from each"},
+            ].map(a=>(
+              <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
+                style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
+                  borderRadius:12,cursor:"pointer",textAlign:"left"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>{a.label}</div>
+                <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2}}>{a.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1834,6 +1855,7 @@ const GAME_CATS = { dubai:DXB_CATS, taiwanese:[{id:"all",label:"All"},{id:"high"
 const STORAGE_KEY = "mahjong_companion_v2";
 const REGULARS_KEY = "mahjong_regulars_v1";
 const ARCHIVE_KEY = "mahjong_archive_v1";
+const AED_KEY = "mahjong_aed_v1";
 const WINDS = [
   { id:"E", label:"East",  emoji:"🀀", char:"東" },
   { id:"S", label:"South", emoji:"🀁", char:"南" },
@@ -1889,6 +1911,12 @@ function loadArchive() {
 }
 function saveArchive(games) {
   try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify((games || []).slice(0, 30))); } catch {}
+}
+function loadAed() {
+  try { return localStorage.getItem(AED_KEY) || ""; } catch { return ""; }
+}
+function saveAed(v) {
+  try { localStorage.setItem(AED_KEY, String(v ?? "")); } catch {}
 }
 function archiveNight({ players, round, roundHistory, roundWind, dealerStreak }) {
   const snapshot = {
@@ -2687,7 +2715,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [shareNote, setShareNote] = useState("");
   const [tableAction, setTableAction] = useState(null);
   const [actionDraft, setActionDraft] = useState({});
-  const [aedPerPoint, setAedPerPoint] = useState("");
+  const [aedPerPoint, setAedPerPoint] = useState(() => loadAed());
   const [settleNote, setSettleNote] = useState("");
   const [regulars, setRegulars] = useState(() => loadRegulars());
 
@@ -2696,12 +2724,14 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory, dealerStreak });
   }, [activeGame.id, players, round, roundWind, roundHistory, dealerStreak]);
 
+  useEffect(() => { saveAed(aedPerPoint); }, [aedPerPoint]);
+
   // Sync to room if host
   useEffect(() => {
     if (!isHost || !room) return;
     const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id, dealerStreak };
     apiUpdateRoom(room.code, gameState).catch(()=>{});
-  }, [players, round, roundWind, roundHistory]);
+  }, [players, round, roundWind, roundHistory, dealerStreak, isHost, room]);
 
   const game = activeGame;
   const isDXB = game.id === "dubai";
@@ -2943,6 +2973,10 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   const endNightAndReset = (goHome) => {
+    const msg = goHome
+      ? "Save this night to Past nights and go home?"
+      : "Save this night and start a new scorecard with the same names?";
+    if (!window.confirm(msg)) return;
     archiveNight({ players, round, roundHistory, roundWind, dealerStreak });
     rememberPlayers(players);
     setRegulars(loadRegulars());
@@ -3808,7 +3842,17 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
             </button>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
-            <DxbCameraTab game={game} onScore={handleWizardScore} players={players} roundWind={roundWind}/>
+            <DxbCameraTab
+              game={game}
+              onScore={handleWizardScore}
+              players={players}
+              roundWind={roundWind}
+              onTableAction={(id) => {
+                setShowScoreSheet(false);
+                setTableAction(id);
+                setActionDraft({});
+              }}
+            />
           </div>
         </div>
       )}
