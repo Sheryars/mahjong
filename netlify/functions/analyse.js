@@ -38,13 +38,18 @@ export const handler = async function(event, context) {
     };
   }
 
-  if (!image) {
+  const imageData = String(image || "").replace(/\s/g, "");
+  if (!imageData || imageData.length < 200) {
     return {
       statusCode: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: "No image provided" })
     };
   }
+
+  const mediaType = imageData.startsWith("iVBOR") ? "image/png"
+    : imageData.startsWith("UklGR") ? "image/webp"
+    : "image/jpeg";
 
   const systemPrompt = `You are an expert Taiwanese/Dubai-style Mahjong tile recognition AI.
 Analyse the photo of a winning Mahjong hand and return ONLY a raw JSON object — no markdown, no explanation.
@@ -90,41 +95,58 @@ Dubai Mahjong rules:
 - Count flower tiles separately — they sit to the side of the main hand
 - tile_count should be total tiles visible including flowers`;
 
+  const models = ["claude-sonnet-4-5", "claude-opus-4-5"];
+  const parseAnthropicError = (status, raw) => {
+    try {
+      const parsed = JSON.parse(raw);
+      const msg = parsed?.error?.message || parsed?.message;
+      if (msg) return msg;
+    } catch { /* use raw */ }
+    return `Anthropic API error: ${status}`;
+  };
+
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-5",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: "image/jpeg", data: image }
-            },
-            {
-              type: "text",
-              text: "Analyse this Mahjong hand photo and return the JSON object."
-            }
-          ]
-        }]
-      })
-    });
+    let response;
+    let lastError = "";
+    for (const model of models) {
+      response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: { type: "base64", media_type: mediaType, data: imageData }
+              },
+              {
+                type: "text",
+                text: "Analyse this Mahjong hand photo and return the JSON object."
+              }
+            ]
+          }]
+        })
+      });
+      if (response.ok) break;
+      const errText = await response.text();
+      lastError = parseAnthropicError(response.status, errText);
+      console.error("Anthropic API error:", model, response.status, errText);
+      if (response.status !== 400 && response.status !== 404) break;
+    }
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("Anthropic API error:", response.status, errText);
       return {
-        statusCode: 502,
+        statusCode: response.status === 400 ? 400 : 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ error: `Anthropic API error: ${response.status}` })
+        body: JSON.stringify({ error: lastError || `Anthropic API error: ${response.status}` })
       };
     }
 
