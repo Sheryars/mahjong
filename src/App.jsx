@@ -2133,7 +2133,7 @@ function TrackPlayerCard({
   const scoreColor = player.score > 0 ? "#2F7D4A" : player.score < 0 ? "#C23B3B" : "var(--mj-muted)";
   return (
     <div className={`mj-seat-card${isDealer ? " dealer" : ""}`}>
-      <div className="mj-seat-wind" style={{background: `${player.color}24`, color: player.color}}>
+      <div className="mj-seat-wind" style={{background: player.color, color: "#141210"}}>
         <div className="mj-seat-letter">{w.id}</div>
         <div className="mj-seat-char">{w.char}</div>
       </div>
@@ -2211,7 +2211,7 @@ function PastNightsList() {
   if (!archive.length) {
     return (
       <div style={{textAlign: "center", padding: "18px 12px", color: "var(--mj-muted)", fontSize: 13}}>
-        Finished nights show up here after you tap End night.
+        Finished nights show up here after you tap Finish.
       </div>
     );
   }
@@ -2927,7 +2927,7 @@ function GuestView({ room, onLeave }) {
               <div style={{textAlign:"center",padding:"60px 20px",color:"var(--mj-muted)"}}>
                 <div style={{fontSize:15}}>Waiting for the host to start…</div>
               </div>
-            ) : sorted.map(p => (
+            ) : [...players].sort((a,b)=>["E","S","W","N"].indexOf(a.windId)-["E","S","W","N"].indexOf(b.windId)).map(p => (
               <TrackPlayerCard
                 key={p.id}
                 player={p}
@@ -3794,7 +3794,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   Setup
                 </button>
               </div>
-              {sorted.map((p)=>{
+              {[...players].sort((a,b)=>["E","S","W","N"].indexOf(a.windId)-["E","S","W","N"].indexOf(b.windId)).map((p)=>{
                 const isDealer = p.windId==="E";
                 const isRoundWind = p.windId===roundWind;
                 return (
