@@ -280,88 +280,88 @@ function HandDiagram({ groups, accentColor, tileSize=42 }) {
 // All points from the Dubai Mah Jong 2025 rulebook + Scoring Booklet
 
 const DXB_SCORE = {
-  // STEP 1 — always first
+  // Anetum class sheet is the table base. Self-pick stays 5 (MM DXB; Anetum photo reads 1).
   mahjong: 5,
   closing: 5,
-  // STEP 2 — winning tile type
-  east_dealer: 1,
   self_pick: 5,
-  self_pick_flower_wall: 10,
-  concealed_discard: 10,
-  concealed_self_pick: 15,
-  fully_exposed_discard: 10,
+  self_pick_flower_wall: 5,
+  concealed_discard: 5,
+  concealed_self_pick: 10,
+  fully_exposed_discard: 15,
   fully_exposed_self_pick: 15,
   win_within_7: 50,
+  win_within_4: 80,
   seabed: 20,
   earthly: 90,
   heavenly: 100,
-  // STEP 3 — flowers
+  rob_gong: 10,
   per_flower: 1,
-  flower_of_seat: 1,   // bonus +1 per matching seat flower
+  flower_of_seat: 1,
   mixed_bouquet: 5,
   pure_bouquet: 10,
   seven_flowers: 20,
+  seven_flowers_by_round: { E: 20, S: 22, W: 24, N: 26 },
   eight_flowers: 40,
   no_flowers: 1,
   no_honours: 1,
   no_flowers_no_honours: 5,
   no_flowers_no_honours_all_sheung: 15,
-  // STEP 4 — pair/eyes
   good_eye: 2,
   calling_by_pairs: 2,
   true_single_wait: 2,
-  // STEP 5 — suit hands
-  two_suit: 8,
+  false_single_wait: 2,
+  two_suit: 5,
   two_suit_no_honour_no_flower: 15,
   semi_pure: 30,
   pure_suit: 90,
   all_five_suits: 10,
-  // STEP 6 — sheung hands
+  pure_honor: 140,
   all_sheung: 5,
   all_sheung_no_honours_no_flowers: 15,
   step_up: 5,
   all_step_up: 20,
-  all_step_up_same_suit: 90,
-  // STEP 7 — dragon runs
-  mix_dragon_exposed: 8,
+  mix_dragon_exposed: 5,
   mix_dragon_concealed: 10,
   pure_dragon_exposed: 15,
   pure_dragon_concealed: 20,
-  // STEP 8 — brothers/sisters
   brother_2: 5, brother_3: 15, brother_4: 30,
-  sister_2: 5, sister_3: 15, sister_4: 30, sister_5: 50,
-  // STEP 9 — pong hand
+  sister_2: 3, sister_3: 10, sister_4: 25, sister_5: 40,
   all_pong: 25,
   pong_wind: 1, pong_wind_seat: 1, pong_wind_round: 1,
   little_3_winds: 15, big_3_winds: 30, little_4_winds: 60, big_4_winds: 80,
   pong_dragon: 2, little_dragon: 20, big_dragon: 40,
   sister_pong_2: 5, sister_pong_3: 15,
   uncle_pong_2: 5, uncle_pong_3: 15, uncle_pong_4: 30, uncle_pong_5: 60, uncle_pong_6: 80,
-  // STEP 10 — concealed pongs
   concealed_pong_2: 5, concealed_pong_3: 15, concealed_pong_4: 30,
   concealed_pong_5: 80, concealed_pong_5_self_no_gong: 100,
-  // STEP 11 — gong
-  open_gong: 1, concealed_gong: 1,
-  // Rules: concealed Gong collects 5 from each of the other three immediately.
+  open_gong: 1, concealed_gong: 2,
   concealed_gong_collect: 5,
-  rob_gong: 10,
-  self_draw_gong: 30,
   four_in_2: 5, four_in_3: 15, four_in_4: 20,
-  // STEP 12 — terminals
-  no_terminals: 5, no_terminals_no_honours: 8,
+  no_terminals: 5, no_terminals_no_honours: 5,
   all_terminals_with_honours: 20, all_terminals_no_honours: 40,
   terminal_pong_pure: 5, terminal_pong_mix_2: 20,
   terminal_sheung_pure: 5, terminal_sheung_mix_2: 20,
-  // STEP 13 — special hands
   nico_nico: 40, nico_nico_1gong: 10, nico_nico_2gong: 25,
-  orphan_13: 90, orphan_16: 50, orphan_16_19: 10,
-  jade: 20, ruby: 20, diamond: 20,
-  // PENALTIES
+  orphan_13: 90, orphan_16: 50, orphan_16_19: 10, orphan_16_sisters: 5,
+  jade: 20, ruby: 20, diamond: 20, chicken: 20,
   false_mahjong: 25,
   chasing_wind_dragon: 5, chasing_suit: 10,
-  // Dead wall / draw — Anetum sheet + Dubai house rule
   draw_bank: 5,
 };
+
+function dxbDragonRuns(ans) {
+  const raw = ans.dragon_runs ?? ans.dragon_run;
+  if (Array.isArray(raw)) return raw.filter(id => id && id !== "none");
+  if (raw && raw !== "none") return [raw];
+  return [];
+}
+
+function dxbHasHonours(ans) {
+  if (["pure", "two_suit", "two_suit_clean"].includes(ans.suit_type)) return false;
+  if (ans.suit_type === "semi_pure" || ans.suit_type === "all_five" || ans.suit_type === "pure_honor") return true;
+  if (Number(ans.pong_dragon || 0) > 0 || Number(ans.pong_wind || 0) > 0) return true;
+  return ans.honour_pair === true;
+}
 
 // ─── DUBAI SCORING WIZARD QUESTIONS ──────────────────────────────────────────
 // Redesigned: fewer steps, grouped logically, each option has tiles shown inline
@@ -377,13 +377,15 @@ const DXB_QUESTIONS = [
     opts:[
       { id:"discard",          label:"Discard Win",          sub:"Only discarder pays",         emoji:"♟️",
         tiles:[{suit:"bam",n:5}] },
-      { id:"self_pick",        label:"Self Pick",            sub:"All 3 others pay",            emoji:"🤲",
+      { id:"self_pick",        label:"Self Pick",            sub:"All 3 others pay · +5",      emoji:"🤲",
         tiles:[{suit:"pin",n:3}] },
-      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+10 pts · All 3 pay",    emoji:"🌸",
+      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+5 pts · All 3 pay",     emoji:"🌸",
         tiles:[{suit:"flower",n:1}] },
       { id:"seabed",           label:"Last Tile from Wall",  sub:"Seabed +20 pts",             emoji:"🌊",
         tiles:[{suit:"man",n:9}] },
       { id:"within_7",         label:"Win within 7 tiles",   sub:"+50 pts",                    emoji:"⚡",
+        tiles:[] },
+      { id:"within_4",         label:"Human Hand (within 4)",sub:"+80 pts",                    emoji:"🏃",
         tiles:[] },
       { id:"earthly",          label:"Earthly Hand",         sub:"First East discard · 90 pts", emoji:"🌍",
         tiles:[] },
@@ -395,17 +397,19 @@ const DXB_QUESTIONS = [
   // Follow-up only when the sheet already picked self pick / discard
   { id:"win_extra", cat:"🏆 How did you win?",
     q:"Any special win?",
-    hint:"You already chose how they won. Pick None unless one of these rare bonuses applies.",
+    hint:"These add on top of discard or self-pick. Heavenly / Earthly replace the rest.",
     type:"single",
     skip:(ans)=>!ans._sheetWinType,
     opts:[
       { id:"none",             label:"None",                    sub:"Keep the win you already picked", emoji:"✅", tiles:[] },
-      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+10 pts · All 3 pay",            emoji:"🌸",
+      { id:"self_pick_flower", label:"Self Pick (Flower Wall)", sub:"+5 pts on top of self-pick",     emoji:"🌸",
         hide:(ans)=>ans.win_type!=="self_pick",
         tiles:[{suit:"flower",n:1}] },
       { id:"seabed",           label:"Last Tile from Wall",     sub:"Seabed +20 pts",                 emoji:"🌊",
         tiles:[{suit:"man",n:9}] },
       { id:"within_7",         label:"Win within 7 tiles",      sub:"+50 pts",                        emoji:"⚡", tiles:[] },
+      { id:"within_4",         label:"Human Hand (within 4)",   sub:"+80 pts",                        emoji:"🏃", tiles:[] },
+      { id:"rob_gong",         label:"Robbed a Gong",           sub:"+10 pts",                        emoji:"🥷", tiles:[] },
       { id:"earthly",          label:"Earthly Hand",            sub:"First East discard · 90 pts",    emoji:"🌍",
         hide:(ans)=>ans.win_type!=="discard", tiles:[] },
       { id:"heavenly",         label:"Heavenly Hand",           sub:"Dealer wins on deal · 100 pts",  emoji:"☁️",
@@ -422,23 +426,19 @@ const DXB_QUESTIONS = [
     opts:[
       { id:"normal",         label:"Normal",          sub:"Mix of shown & hidden tiles", emoji:"🃏",
         tiles:[{suit:"bam",n:2},{suit:"back",n:""},{suit:"back",n:""}] },
-      { id:"fully_concealed",label:"Fully Concealed", sub:"+10 pts (discard) / +15 pts (self pick)", emoji:"🙈",
+      { id:"fully_concealed",label:"Fully Concealed", sub:"+5 discard / +10 self pick", emoji:"🙈",
         tiles:[{suit:"back",n:""},{suit:"back",n:""},{suit:"back",n:""}] },
-      { id:"fully_exposed",  label:"Fully Exposed",   sub:"Last Man Standing · No Closing", emoji:"👁️",
+      { id:"fully_exposed",  label:"Fully Exposed",   sub:"Last Man Standing · +15 · No Closing", emoji:"👁️",
         tiles:[{suit:"pin",n:4},{suit:"pin",n:5},{suit:"pin",n:6}] },
     ]
   },
 
   // ── STEP 3: Closing + East in one screen ──
-  { id:"closing", cat:"📣 Closing & Dealer",
-    q:"Did you Close your hand? Is winner East?",
-    hint:"Close = turning tiles face-down to declare tenpai",
-    type:"dual_bool",
+  { id:"closing", cat:"📣 Closing",
+    q:"Did you Close your hand?",
+    hint:"Close = turning tiles face-down to declare tenpai. +5 pts. Not on Anetum as an East bonus.",
+    type:"boolean",
     skip:(ans)=>["earthly","heavenly"].includes(ans.win_type)||ans.exposed==="fully_exposed",
-    fields:[
-      { id:"closing", label:"Hand was Closed / Called", sub:"+5 pts", emoji:"📣" },
-      { id:"east",    label:"Winner is East (Dealer)", sub:"+1 pt",  emoji:"🀀" },
-    ]
   },
 
   // ── STEP 4: Flowers ──
@@ -483,6 +483,7 @@ const DXB_QUESTIONS = [
         type:"select", opts:[
           {id:"normal", label:"Normal wait",      emoji:"✅"},
           {id:"single", label:"True Single Wait", emoji:"🎯", sub:"+2 pts"},
+          {id:"false",  label:"False Single Wait",emoji:"↔️", sub:"+2 · min 3 tiles"},
           {id:"pairs",  label:"Calling by Pairs", emoji:"👥", sub:"+2 pts"},
         ]
       },
@@ -518,6 +519,7 @@ const DXB_QUESTIONS = [
         tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
       { id:"orphan16", label:"16 Orphans",   sub:"50 pts · No Closing",                     emoji:"🃏",
         tiles:[{suit:"man",n:1},{suit:"pin",n:9},{suit:"wind",n:"S"},{suit:"dragon",n:"W"}] },
+      { id:"chicken",  label:"Chicken Hand", sub:"Only 1 pt before Mahjong · 20 + 5",       emoji:"🐔", tiles:[] },
       { id:"jade",     label:"Jade Hand",    sub:"Green Dragon pong + all Bamboo · 20 pts", emoji:"💚",
         tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"bam",n:3},{suit:"bam",n:4},{suit:"bam",n:5}] },
       { id:"ruby",     label:"Ruby Hand",    sub:"Red Dragon pong + all Characters · 20 pts",emoji:"❤️",
@@ -535,7 +537,7 @@ const DXB_QUESTIONS = [
     opts:[
       { id:"mixed",        label:"Mixed suits",        sub:"All 3 suits + honours",              emoji:"🌈",
         tiles:[{suit:"man",n:3},{suit:"pin",n:5},{suit:"bam",n:7}] },
-      { id:"two_suit",     label:"Two suits, no honours",sub:"Suit tiles only · flowers OK · +8", emoji:"🔵",
+      { id:"two_suit",     label:"Two suits, no honours",sub:"Suit tiles only · flowers OK · +5", emoji:"🔵",
         tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4}] },
       { id:"two_suit_clean",label:"Two suits, no honours, no flowers", sub:"+15 pts",            emoji:"⚪",
         tiles:[{suit:"man",n:7},{suit:"man",n:8},{suit:"man",n:9},{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3}] },
@@ -543,6 +545,9 @@ const DXB_QUESTIONS = [
         tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
       { id:"pure",         label:"Pure Suit",          sub:"One suit only · +90 pts",            emoji:"🟢",
         tiles:[{suit:"pin",n:1},{suit:"pin",n:3},{suit:"pin",n:5},{suit:"pin",n:7},{suit:"pin",n:9}] },
+      { id:"pure_honor",   label:"Pure Honour",        sub:"Winds + dragons only · +140 pts",    emoji:"⬛",
+        hide:(ans)=>ans.hand_type==="all_sheung",
+        tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"S"},{suit:"dragon",n:"G"},{suit:"dragon",n:"R"}] },
       { id:"all_five",     label:"All 5 Suits",        sub:"3 suits + winds + dragons · +10 pts",emoji:"🌈",
         hide:(ans)=>ans.hand_type==="all_sheung",
         tiles:[{suit:"man",n:1},{suit:"pin",n:1},{suit:"bam",n:1},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
@@ -550,11 +555,18 @@ const DXB_QUESTIONS = [
   },
 
   // ── STEP 9: Honours (dragons + winds) ──
+  { id:"honour_pair", cat:"🎨 Suit pattern",
+    q:"Is the pair winds or dragons?",
+    hint:"All Sheung can still have an honour pair. That blocks the clean +15.",
+    type:"boolean",
+    skip:(ans)=>ans.hand_type!=="all_sheung"||["pure","two_suit","two_suit_clean"].includes(ans.suit_type),
+    tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
+  },
   { id:"pong_dragon", cat:"🐉 Dragons",
     q:"How many Dragon Pongs/Gongs?",
     hint:"Red 中, Green 發, White 白 — 2 pts each",
     type:"number", min:0, max:3,
-    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
+    skip:(ans)=>ans.suit_type==="pure"||ans.suit_type==="two_suit"||ans.suit_type==="two_suit_clean"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
     tiles:[{suit:"dragon",n:"G"},{suit:"dragon",n:"G"},{suit:"dragon",n:"G"}]
   },
   { id:"dragon_combo", cat:"🐉 Dragons",
@@ -573,7 +585,7 @@ const DXB_QUESTIONS = [
     q:"How many Wind Pongs/Gongs?",
     hint:"1 pt each + 1 bonus if it's your seat wind + 1 bonus if it's the round wind",
     type:"number", min:0, max:4,
-    skip:(ans)=>ans.suit_type==="pure"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
+    skip:(ans)=>ans.suit_type==="pure"||ans.suit_type==="two_suit"||ans.suit_type==="two_suit_clean"||ans.hand_type==="special"||ans.hand_type==="all_sheung",
     tiles:[{suit:"wind",n:"E"},{suit:"wind",n:"E"},{suit:"wind",n:"E"}]
   },
   { id:"wind_seat", cat:"💨 Winds",
@@ -610,7 +622,7 @@ const DXB_QUESTIONS = [
   // ── STEP 10: Concealed pongs + Gongs together ──
   { id:"concealed_pongs", cat:"🔒 Concealed sets",
     q:"How many Concealed Pongs?",
-    hint:"Hidden triplets in your hand. Each Open Gong = 1 Concealed Pong",
+    hint:"Hidden triplets. Count each Gong as one concealed pong here — do not also add it later.",
     type:"number", min:0, max:5,
     skip:(ans)=>ans.hand_type==="all_sheung",
     tiles:[{suit:"back",n:""},{suit:"pin",n:5},{suit:"pin",n:5},{suit:"back",n:""}]
@@ -624,7 +636,7 @@ const DXB_QUESTIONS = [
   },
   { id:"concealed_gongs", cat:"🔒 Concealed sets",
     q:"How many Concealed Gongs?",
-    hint:"4 of same tile, kept hidden · +1 pt + collect 5 pts from each player immediately",
+    hint:"4 of same tile, kept hidden · +2 pts + collect 5 from each player immediately",
     type:"number", min:0, max:4,
     skip:(ans)=>ans.hand_type==="all_sheung",
     tiles:[{suit:"back",n:""},{suit:"man",n:3},{suit:"man",n:3},{suit:"back",n:""}]
@@ -633,12 +645,11 @@ const DXB_QUESTIONS = [
   // ── STEP 11: Bonus patterns ──
   { id:"dragon_run", cat:"🐲 Dragon Run",
     q:"Any Dragon Run? (1–9 complete sequence)",
-    hint:"Three sheungs forming 1-2-3, 4-5-6, 7-8-9",
-    type:"single",
+    hint:"Mix and pure can both apply. Tick every run that is in the hand.",
+    type:"multi",
     skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
     opts:[
-      { id:"none",     label:"No Dragon Run",         emoji:"❌", tiles:[] },
-      { id:"mix_exp",  label:"Mixed Dragon — Exposed", sub:"All 3 suits · +8 pts",       emoji:"🐲",
+      { id:"mix_exp",  label:"Mixed Dragon — Exposed", sub:"All 3 suits · +5 pts",       emoji:"🐲",
         tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
       { id:"mix_con",  label:"Mixed Dragon — Concealed",sub:"All 3 suits · +10 pts",     emoji:"🀫",
         tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}] },
@@ -650,33 +661,105 @@ const DXB_QUESTIONS = [
   },
   { id:"step_up", cat:"📈 Step Up",
     q:"Step-Up Sheung?",
-    hint:"3+ sequences each stepping 1 number higher than the previous",
+    hint:"3+ sequences each stepping 1 number higher than the previous. Claim once only.",
     type:"single",
     skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
     opts:[
-      { id:"none",          label:"No Step Up", emoji:"❌", tiles:[] },
-      { id:"step",          label:"Step Up",    sub:"3 stepping sheungs · +5 pts",       emoji:"📈",
+      { id:"none",     label:"No Step Up", emoji:"❌", tiles:[] },
+      { id:"step",     label:"Step Up",    sub:"3 stepping sheungs · +5 pts",       emoji:"📈",
         tiles:[{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4},{suit:"man",n:3},{suit:"man",n:4},{suit:"man",n:5},{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6}] },
-      { id:"all_step",      label:"All Step Up",sub:"All 5 sheungs step up · +20 pts",  emoji:"🚀",
+      { id:"all_step", label:"All Step Up",sub:"All 5 sheungs step up · +20 pts",  emoji:"🚀",
         tiles:[{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4},{suit:"man",n:3},{suit:"man",n:4},{suit:"man",n:5}] },
-      { id:"all_step_pure", label:"All Step Up Same Suit",sub:"+90 pts",                emoji:"💯",
-        tiles:[{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:4}] },
+    ]
+  },
+  { id:"brothers", cat:"👫 Brothers / Sisters",
+    q:"Brother Sheungs (same suit, same numbers)?",
+    hint:"e.g. 123 + 123 in Characters",
+    type:"number", min:0, max:4,
+    skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
+    tiles:[{suit:"man",n:1},{suit:"man",n:2},{suit:"man",n:3},{suit:"man",n:1},{suit:"man",n:2},{suit:"man",n:3}]
+  },
+  { id:"sisters", cat:"👫 Brothers / Sisters",
+    q:"Sister Sheungs (same numbers, different suits)?",
+    hint:"Anetum: 2=+3 · 3=+10 · 4=+25 · 5=+40",
+    type:"number", min:0, max:5,
+    skip:(ans)=>ans.hand_type==="all_pong"||ans.hand_type==="special",
+    tiles:[{suit:"pin",n:4},{suit:"pin",n:5},{suit:"pin",n:6},{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6}]
+  },
+  { id:"sister_pongs", cat:"🎲 Sister / Uncle Pongs",
+    q:"Sister Pongs (same number, different suits)?",
+    type:"number", min:0, max:3,
+    skip:(ans)=>ans.hand_type==="all_sheung"||ans.hand_type==="special",
+    tiles:[{suit:"man",n:9},{suit:"man",n:9},{suit:"man",n:9},{suit:"pin",n:9},{suit:"pin",n:9},{suit:"pin",n:9}]
+  },
+  { id:"uncle_pongs", cat:"🎲 Sister / Uncle Pongs",
+    q:"Uncle Pongs (neighbours in one suit)?",
+    hint:"111+222=2, up to 111…555+66=5+pair",
+    type:"number", min:0, max:5,
+    skip:(ans)=>ans.hand_type==="all_sheung"||ans.hand_type==="special",
+    tiles:[{suit:"bam",n:2},{suit:"bam",n:2},{suit:"bam",n:2},{suit:"bam",n:3},{suit:"bam",n:3},{suit:"bam",n:3}]
+  },
+  { id:"four_ways", cat:"🔢 Four-in-N",
+    q:"Four of the same number used in more than one set?",
+    type:"single",
+    skip:(ans)=>ans.hand_type==="special",
+    opts:[
+      { id:"none", label:"No", emoji:"❌", tiles:[] },
+      { id:"two",  label:"Four in 2 ways", sub:"+5 pts",  emoji:"2️⃣" },
+      { id:"three",label:"Four in 3 ways", sub:"+15 pts", emoji:"3️⃣" },
+      { id:"four", label:"Four in 4 ways", sub:"+20 pts", emoji:"4️⃣" },
     ]
   },
   { id:"terminals", cat:"🔢 Terminals",
     q:"Terminal tiles (1s and 9s)?",
-    hint:"Terminals = tiles numbered 1 or 9 in any suit",
+    hint:"Simple hand = no 1s/9s and no honours · +5",
     type:"single",
+    skip:(ans)=>ans.hand_type==="special",
     opts:[
       { id:"none",          label:"Normal mix",              sub:"No bonus",                         emoji:"—",  tiles:[] },
-      { id:"no_term",       label:"No Terminals",            sub:"No 1s or 9s (honours OK) · +5 pts",emoji:"🚫",
+      { id:"no_term",       label:"No Terminals",            sub:"No 1s or 9s (honours OK) · +5",    emoji:"🚫",
         tiles:[{suit:"man",n:3},{suit:"pin",n:5},{suit:"bam",n:7}] },
-      { id:"no_term_no_hon",label:"No Terminals, No Honours",sub:"Clean hand · +8 pts",             emoji:"⛔",
+      { id:"no_term_no_hon",label:"Simple hand",             sub:"No terminals, no honours · +5",    emoji:"⛔",
         tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6}] },
       { id:"all_term_hon",  label:"All Terminals + Honours", sub:"+20 pts",                         emoji:"🔢",
         tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
       { id:"all_term_pure", label:"All Terminals, No Honours",sub:"+40 pts",                       emoji:"💯",
         tiles:[{suit:"man",n:1},{suit:"man",n:9},{suit:"pin",n:1},{suit:"pin",n:9},{suit:"bam",n:1}] },
+    ]
+  },
+  { id:"term_sets", cat:"🔢 Terminals",
+    q:"Terminal pong or sheung sets?",
+    hint:"Don't also take Brother points for the same 123+789 pair.",
+    type:"single",
+    skip:(ans)=>ans.hand_type==="special"||["no_term","no_term_no_hon"].includes(ans.terminals),
+    opts:[
+      { id:"none",        label:"None",                      emoji:"❌", tiles:[] },
+      { id:"pong_pure",   label:"111 + 999 same suit",       sub:"+5",  emoji:"🔢" },
+      { id:"pong_mix",    label:"Two terminal pong sets",    sub:"+20", emoji:"🔢" },
+      { id:"sheung_pure", label:"123 + 789 same suit",       sub:"+5",  emoji:"〰️" },
+      { id:"sheung_2",    label:"Two pure terminal sheungs", sub:"+20", emoji:"〰️" },
+    ]
+  },
+  { id:"nico_extra", cat:"⭐ Special Hand",
+    q:"Nico Nico gongs?",
+    hint:"Two pairs that make a gong, even if not declared.",
+    type:"single",
+    skip:(ans)=>ans.special_hand!=="nico",
+    opts:[
+      { id:"none", label:"No extra gong", emoji:"❌" },
+      { id:"one",  label:"1 Gong",        sub:"+10 pts", emoji:"1️⃣" },
+      { id:"two",  label:"2 Gongs",       sub:"+25 pts", emoji:"2️⃣" },
+    ]
+  },
+  { id:"orphan_extra", cat:"⭐ Special Hand",
+    q:"16 Orphans extras?",
+    type:"single",
+    skip:(ans)=>ans.special_hand!=="orphan16",
+    opts:[
+      { id:"none",     label:"None",                         emoji:"❌" },
+      { id:"sisters",  label:"Sister sheungs",               sub:"+5",  emoji:"👫" },
+      { id:"all19",    label:"1s & 9s in all three suits",   sub:"+10", emoji:"🔢" },
+      { id:"both",     label:"Both extras",                  sub:"+15", emoji:"✨" },
     ]
   },
 ];
@@ -685,95 +768,108 @@ function calcDxbScore(raw) {
   const ans = raw.hand_type === "all_sheung"
     ? { ...raw, pong_dragon:0, dragon_combo:"none", pong_wind:0, wind_seat:false, wind_round:false, wind_combo:"none", concealed_pongs:0, open_gongs:0, concealed_gongs:0 }
     : raw.hand_type === "all_pong"
-      ? { ...raw, dragon_run:"none", step_up:"none" }
+      ? { ...raw, dragon_run:"none", dragon_runs:[], step_up:"none", brothers:0, sisters:0 }
       : raw;
   let pts = 0;
   const breakdown = [];
   const add = (n, label) => { if(n>0){pts+=n; breakdown.push({pts:n,label});} };
 
-  // Extract dual-field answers
   const closing   = ans.closing   ?? ans["closing.closing"]   ?? false;
-  const east      = ans.east      ?? ans["closing.east"]      ?? false;
   const good_eye  = ans.good_eye  ?? ans["eyes_wait.good_eye"]?? false;
   const wait_type = ans.wait_type ?? ans["eyes_wait.wait_type"]?? "normal";
+  const extra     = ans.win_extra;
+  const selfDraw  = ans.win_type==="self_pick" || ans.win_type==="self_pick_flower" || extra==="self_pick_flower";
+  const fcEarly = Number(ans.flower_count||0);
+  if(fcEarly===7){
+    add(DXB_SCORE.seven_flowers_by_round[ans._roundWind] ?? DXB_SCORE.seven_flowers, "7 Flowers — instant win");
+    return {pts,breakdown};
+  }
+  if(fcEarly===8){ add(DXB_SCORE.eight_flowers,"8 Flowers — instant win"); return {pts,breakdown}; }
 
-  // Always
   add(DXB_SCORE.mahjong, "Mahjong/Winning");
-  if(closing) add(DXB_SCORE.closing, "Closing/Calling");
+  if(closing && ans.special_hand!=="nico" && ans.special_hand!=="orphan13" && ans.special_hand!=="orphan16") {
+    add(DXB_SCORE.closing, "Closing/Calling");
+  }
 
-  // Win type
-  if(ans.win_type==="heavenly") { add(DXB_SCORE.heavenly,"Heavenly Hand"); return {pts,breakdown}; }
-  if(ans.win_type==="earthly") { add(DXB_SCORE.earthly,"Earthly Hand"); return {pts,breakdown}; }
-  if(ans.win_type==="within_7") add(DXB_SCORE.win_within_7,"Win within 7 tiles");
-  if(ans.win_type==="seabed") add(DXB_SCORE.seabed,"Seabed — last tile from wall");
-  if(ans.win_type==="self_pick") add(DXB_SCORE.self_pick,"Self Pick");
-  if(ans.win_type==="self_pick_flower") add(DXB_SCORE.self_pick_flower_wall,"Self Pick from Flower Wall");
+  if(ans.win_type==="heavenly" || extra==="heavenly") { add(DXB_SCORE.heavenly,"Heavenly Hand"); return {pts,breakdown}; }
+  if(ans.win_type==="earthly" || extra==="earthly") { add(DXB_SCORE.earthly,"Earthly Hand"); return {pts,breakdown}; }
 
-  // Concealed/exposed
+  if(ans.win_type==="self_pick" || ans.win_type==="self_pick_flower") add(DXB_SCORE.self_pick,"Self Pick");
+  if(ans.win_type==="self_pick_flower" || extra==="self_pick_flower") add(DXB_SCORE.self_pick_flower_wall,"Self Pick from Flower Wall");
+  if(ans.win_type==="seabed" || extra==="seabed") add(DXB_SCORE.seabed,"Seabed — last tile from wall");
+  if(ans.win_type==="within_7" || extra==="within_7") add(DXB_SCORE.win_within_7,"Win within 7 tiles");
+  if(ans.win_type==="within_4" || extra==="within_4") add(DXB_SCORE.win_within_4,"Human Hand — within 4 tiles");
+  if(extra==="rob_gong") add(DXB_SCORE.rob_gong,"Robbed a Gong");
+
   if(ans.exposed==="fully_concealed"){
-    if(ans.win_type==="self_pick"||ans.win_type==="self_pick_flower") add(DXB_SCORE.concealed_self_pick,"Concealed Hand — Self Pick");
+    if(selfDraw) add(DXB_SCORE.concealed_self_pick,"Concealed Hand — Self Pick");
     else add(DXB_SCORE.concealed_discard,"Concealed Hand — Discard");
   }
   if(ans.exposed==="fully_exposed"){
-    if(ans.win_type==="self_pick"||ans.win_type==="self_pick_flower") add(DXB_SCORE.fully_exposed_self_pick,"Fully Exposed — Self Pick");
+    if(selfDraw) add(DXB_SCORE.fully_exposed_self_pick,"Fully Exposed — Self Pick");
     else add(DXB_SCORE.fully_exposed_discard,"Fully Exposed — Discard");
   }
-  if(east) add(DXB_SCORE.east_dealer,"East/Dealer bonus");
 
-  // Flowers
   const fc = Number(ans.flower_count||0);
-  if(fc===7){ add(DXB_SCORE.seven_flowers,"7 Flowers — instant win"); return {pts,breakdown}; }
-  if(fc===8){ add(DXB_SCORE.eight_flowers,"8 Flowers — instant win"); return {pts,breakdown}; }
   if(fc>0){ add(fc,"Flowers (×"+fc+")"); }
   if(fc>0&&Number(ans.seat_flowers||0)>0) add(Number(ans.seat_flowers),"Seat flower bonus");
-  if(fc===0) add(DXB_SCORE.no_flowers,"No Flowers");
   if(ans.bouquet==="mixed") add(DXB_SCORE.mixed_bouquet,"Mixed Bouquet");
   if(ans.bouquet==="pure") add(DXB_SCORE.pure_bouquet,"Pure Bouquet");
   if(ans.bouquet==="both"){ add(DXB_SCORE.mixed_bouquet,"Mixed Bouquet"); add(DXB_SCORE.pure_bouquet,"Pure Bouquet"); }
 
-  // Miscellaneous
-  if(ans.suit_type==="pure"||ans.suit_type==="semi_pure"){ /* no honours, handled in suit */ }
-  else if(fc===0&&(!ans.pong_dragon||ans.pong_dragon===0)&&(!ans.pong_wind||ans.pong_wind===0)) add(DXB_SCORE.no_honours,"No Honour tiles");
+  const hasHonours = dxbHasHonours(ans);
+  const allSheungClean = ans.hand_type==="all_sheung" && fc===0 && !hasHonours;
+  if(!allSheungClean){
+    if(fc===0 && !hasHonours) add(DXB_SCORE.no_flowers_no_honours,"No Flowers and No Honours");
+    else {
+      if(fc===0) add(DXB_SCORE.no_flowers,"No Flowers");
+      if(!hasHonours) add(DXB_SCORE.no_honours,"No Honour tiles");
+    }
+  }
 
-  // Good eye / pair
   if(good_eye===true) add(DXB_SCORE.good_eye,"Good Eyes (2, 5 or 8 pair)");
   if(wait_type==="single") add(DXB_SCORE.true_single_wait,"True Single Wait");
+  if(wait_type==="false") add(DXB_SCORE.false_single_wait,"False Single Wait");
   if(wait_type==="pairs") add(DXB_SCORE.calling_by_pairs,"Calling by Pairs");
 
-  // Suit
   if(ans.suit_type==="pure") add(DXB_SCORE.pure_suit,"Pure Suit (one suit only)");
   else if(ans.suit_type==="semi_pure") add(DXB_SCORE.semi_pure,"Semi Pure (one suit + honours)");
   else if(ans.suit_type==="two_suit_clean") add(DXB_SCORE.two_suit_no_honour_no_flower,"Two Suits, No Honours/Flowers");
   else if(ans.suit_type==="two_suit") add(DXB_SCORE.two_suit,"Two Suits (no honours)");
   else if(ans.suit_type==="all_five") add(DXB_SCORE.all_five_suits,"All 5 Suits");
+  else if(ans.suit_type==="pure_honor") add(DXB_SCORE.pure_honor,"Pure Honour");
 
-  // Sheung type
   if(ans.hand_type==="all_sheung"){
-    if(ans.suit_type==="mixed"||!ans.suit_type) add(DXB_SCORE.all_sheung,"All Sheung");
-    else add(DXB_SCORE.all_sheung_no_honours_no_flowers,"All Sheung — No Honours/Flowers");
+    if(allSheungClean) add(DXB_SCORE.all_sheung_no_honours_no_flowers,"All Sheung — No Honours/Flowers");
+    else add(DXB_SCORE.all_sheung,"All Sheung");
   }
 
-  // Step up
   if(ans.step_up==="step") add(DXB_SCORE.step_up,"Step Up");
   if(ans.step_up==="all_step") add(DXB_SCORE.all_step_up,"All Step Up");
-  if(ans.step_up==="all_step_pure") add(DXB_SCORE.all_step_up_same_suit,"All Step Up Same Suit");
 
-  // Dragon run
-  if(ans.dragon_run==="mix_exp") add(DXB_SCORE.mix_dragon_exposed,"Mixed Dragon Run — Exposed");
-  if(ans.dragon_run==="mix_con") add(DXB_SCORE.mix_dragon_concealed,"Mixed Dragon Run — Concealed");
-  if(ans.dragon_run==="pure_exp") add(DXB_SCORE.pure_dragon_exposed,"Pure Dragon Run — Exposed");
-  if(ans.dragon_run==="pure_con") add(DXB_SCORE.pure_dragon_concealed,"Pure Dragon Run — Concealed");
+  const runs = dxbDragonRuns(ans);
+  if(runs.includes("mix_exp")) add(DXB_SCORE.mix_dragon_exposed,"Mixed Dragon Run — Exposed");
+  if(runs.includes("mix_con")) add(DXB_SCORE.mix_dragon_concealed,"Mixed Dragon Run — Concealed");
+  if(runs.includes("pure_exp")) add(DXB_SCORE.pure_dragon_exposed,"Pure Dragon Run — Exposed");
+  if(runs.includes("pure_con")) add(DXB_SCORE.pure_dragon_concealed,"Pure Dragon Run — Concealed");
 
-  // Pong hand
+  const br = Number(ans.brothers||0);
+  if(br===2) add(DXB_SCORE.brother_2,"2 Brother Sheungs");
+  if(br===3) add(DXB_SCORE.brother_3,"3 Brother Sheungs");
+  if(br>=4) add(DXB_SCORE.brother_4,"4 Brother Sheungs");
+  const sr = Number(ans.sisters||0);
+  if(sr===2) add(DXB_SCORE.sister_2,"2 Sister Sheungs");
+  if(sr===3) add(DXB_SCORE.sister_3,"3 Sister Sheungs");
+  if(sr===4) add(DXB_SCORE.sister_4,"4 Sister Sheungs");
+  if(sr>=5) add(DXB_SCORE.sister_5,"5 Sister Sheungs");
+
   if(ans.hand_type==="all_pong") add(DXB_SCORE.all_pong,"All Pong Hand");
 
-  // Dragons
   const pd = Number(ans.pong_dragon||0);
   if(pd>0) add(pd*DXB_SCORE.pong_dragon, `Dragon Pong ×${pd}`);
   if(ans.dragon_combo==="little") add(DXB_SCORE.little_dragon,"Little Dragons");
   if(ans.dragon_combo==="big") add(DXB_SCORE.big_dragon,"Big Dragons");
 
-  // Winds
   const pw = Number(ans.pong_wind||0);
   if(pw>0) add(pw*DXB_SCORE.pong_wind, `Wind Pong ×${pw}`);
   if(ans.wind_seat) add(DXB_SCORE.pong_wind_seat,"Wind of Seat bonus");
@@ -783,31 +879,56 @@ function calcDxbScore(raw) {
   if(ans.wind_combo==="little4") add(DXB_SCORE.little_4_winds,"Little 4 Winds");
   if(ans.wind_combo==="big4") add(DXB_SCORE.big_4_winds,"Big 4 Winds");
 
-  // Concealed pongs
+  const sp = Number(ans.sister_pongs||0);
+  if(sp===2) add(DXB_SCORE.sister_pong_2,"2 Sister Pongs");
+  if(sp>=3) add(DXB_SCORE.sister_pong_3,"3 Sister Pongs");
+  const up = Number(ans.uncle_pongs||0);
+  if(up===2) add(DXB_SCORE.uncle_pong_2,"Uncle Pongs ×2");
+  if(up===3) add(DXB_SCORE.uncle_pong_3,"Uncle Pongs ×3");
+  if(up===4) add(DXB_SCORE.uncle_pong_4,"Uncle Pongs ×4");
+  if(up>=5) add(ans.hand_type==="all_pong" ? DXB_SCORE.uncle_pong_6 : DXB_SCORE.uncle_pong_5, up>=5 && ans.hand_type==="all_pong" ? "Uncle Pongs 111–555 + 66" : "Uncle Pongs ×5");
+
+  const og=Number(ans.open_gongs||0), cg=Number(ans.concealed_gongs||0);
   const cp = Number(ans.concealed_pongs||0);
   if(cp===2) add(DXB_SCORE.concealed_pong_2,"2 Concealed Pongs");
   if(cp===3) add(DXB_SCORE.concealed_pong_3,"3 Concealed Pongs");
   if(cp===4) add(DXB_SCORE.concealed_pong_4,"4 Concealed Pongs");
-  if(cp===5) add(DXB_SCORE.concealed_pong_5,"5 Concealed Pongs");
+  if(cp===5){
+    if(selfDraw && og===0 && cg===0) add(DXB_SCORE.concealed_pong_5_self_no_gong,"5 Concealed Pongs — Self Draw, No Gong");
+    else add(DXB_SCORE.concealed_pong_5,"5 Concealed Pongs");
+  }
 
-  // Gongs
-  const og=Number(ans.open_gongs||0), cg=Number(ans.concealed_gongs||0);
   if(og>0) add(og*DXB_SCORE.open_gong,`Open Gong ×${og}`);
   if(cg>0) add(cg*DXB_SCORE.concealed_gong,`Concealed Gong ×${cg} (+5 pts each from others)`);
 
-  // Terminals
+  if(ans.four_ways==="two") add(DXB_SCORE.four_in_2,"Four in 2 Ways");
+  if(ans.four_ways==="three") add(DXB_SCORE.four_in_3,"Four in 3 Ways");
+  if(ans.four_ways==="four") add(DXB_SCORE.four_in_4,"Four in 4 Ways");
+
   if(ans.terminals==="no_term") add(DXB_SCORE.no_terminals,"No Terminal tiles");
-  if(ans.terminals==="no_term_no_hon") add(DXB_SCORE.no_terminals_no_honours,"No Terminals, No Honours");
+  if(ans.terminals==="no_term_no_hon") add(DXB_SCORE.no_terminals_no_honours,"Simple hand — No Terminals, No Honours");
   if(ans.terminals==="all_term_hon") add(DXB_SCORE.all_terminals_with_honours,"All Terminals with Honours");
   if(ans.terminals==="all_term_pure") add(DXB_SCORE.all_terminals_no_honours,"All Terminals, No Honours");
+  if(ans.term_sets==="pong_pure") add(DXB_SCORE.terminal_pong_pure,"Terminal Pong 111+999");
+  if(ans.term_sets==="pong_mix") add(DXB_SCORE.terminal_pong_mix_2,"Two Terminal Pong sets");
+  if(ans.term_sets==="sheung_pure") add(DXB_SCORE.terminal_sheung_pure,"Terminal Sheung 123+789");
+  if(ans.term_sets==="sheung_2") add(DXB_SCORE.terminal_sheung_mix_2,"Two Terminal Sheung sets");
 
-  // Special hand
-  if(ans.special_hand==="nico") add(DXB_SCORE.nico_nico,"Nico Nico Hand");
+  if(ans.special_hand==="nico"){
+    add(DXB_SCORE.nico_nico,"Nico Nico Hand");
+    if(ans.nico_extra==="one") add(DXB_SCORE.nico_nico_1gong,"Nico Nico + 1 Gong");
+    if(ans.nico_extra==="two") add(DXB_SCORE.nico_nico_2gong,"Nico Nico + 2 Gongs");
+  }
   if(ans.special_hand==="orphan13") add(DXB_SCORE.orphan_13,"13 Orphans");
-  if(ans.special_hand==="orphan16") add(DXB_SCORE.orphan_16,"16 Orphans");
+  if(ans.special_hand==="orphan16"){
+    add(DXB_SCORE.orphan_16,"16 Orphans");
+    if(ans.orphan_extra==="sisters" || ans.orphan_extra==="both") add(DXB_SCORE.orphan_16_sisters,"16 Orphans sister sheungs");
+    if(ans.orphan_extra==="all19" || ans.orphan_extra==="both") add(DXB_SCORE.orphan_16_19,"16 Orphans 1s & 9s in all suits");
+  }
   if(ans.special_hand==="jade") add(DXB_SCORE.jade,"Jade Hand");
   if(ans.special_hand==="ruby") add(DXB_SCORE.ruby,"Ruby Hand");
   if(ans.special_hand==="diamond") add(DXB_SCORE.diamond,"Diamond Hand");
+  if(ans.special_hand==="chicken") add(DXB_SCORE.chicken,"Chicken Hand");
 
   return {pts, breakdown};
 }
@@ -846,14 +967,17 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
     }
     if (next.hand_type === "all_pong") {
       next.dragon_run = "none";
+      next.dragon_runs = [];
       next.step_up = "none";
+      next.brothers = 0;
+      next.sisters = 0;
     }
     return next;
   };
 
   const commitAnswer = (id, val) => {
     let newAns = { ...answers, [id]: val };
-    if (id === "win_extra" && val && val !== "none") newAns.win_type = val;
+    if (id === "win_extra" && (val === "heavenly" || val === "earthly")) newAns.win_type = val;
     if (id === "hand_type") newAns = sanitizeHandAnswers(newAns);
     setAnswers(newAns);
     setDualState({});
@@ -957,6 +1081,52 @@ function DxbWizard({ accentColor, accent, onDone, prefilled = {}, aiResult = nul
           style={{background:"none",border:"none",color:"var(--mj-muted)",fontSize:12,
             cursor:"pointer",padding:"6px 0 12px",display:"block"}}>← Back</button>
       )}
+
+      {/* ── MULTI SELECT ── */}
+      {current.type === "multi" && (() => {
+        const picked = Array.isArray(dualState[current.id])
+          ? dualState[current.id]
+          : (Array.isArray(answers[current.id]) ? answers[current.id] : []);
+        const toggle = (optId) => {
+          setDualState(s => {
+            const cur = Array.isArray(s[current.id]) ? s[current.id] : picked;
+            return { ...s, [current.id]: cur.includes(optId) ? cur.filter(x => x !== optId) : [...cur, optId] };
+          });
+        };
+        return (
+          <div style={{marginTop:8}}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {current.opts.filter(opt => !opt.hide || !opt.hide(answers)).map(opt => {
+                const on = picked.includes(opt.id);
+                return (
+                  <button key={opt.id} type="button" onClick={()=>toggle(opt.id)}
+                    style={{display:"flex",alignItems:"flex-start",gap:12,padding:"12px 14px",
+                      background:on?`${accentColor}18`:"#FFFFFF",
+                      border:`1px solid ${on?accentColor:"var(--mj-line)"}`,
+                      borderRadius:12,cursor:"pointer",textAlign:"left",width:"100%"}}>
+                    <span style={{fontSize:24,flexShrink:0}}>{opt.emoji}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:on?700:500,color:"var(--mj-ink)"}}>{opt.label}</div>
+                      {opt.sub && <div style={{fontSize:11,color:"var(--mj-muted)",marginTop:2}}>{opt.sub}</div>}
+                      {opt.tiles && opt.tiles.length > 0 && (
+                        <div style={{display:"flex",gap:2,marginTop:6,flexWrap:"wrap"}}>
+                          {opt.tiles.slice(0,9).map((t,i)=><Tile key={i} suit={t.suit} n={t.n} size={26}/>)}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{fontSize:16,color:on?accentColor:"var(--mj-muted)"}}>{on?"✓":""}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={()=>commitAnswer(current.id, picked)}
+              style={{width:"100%",padding:12,background:accentColor,border:"none",borderRadius:10,
+                color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer",marginTop:12}}>
+              {picked.length ? `Next · ${picked.length} selected` : "None of these →"}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── SINGLE SELECT ── */}
       {current.type === "single" && (
@@ -1203,7 +1373,7 @@ function captureFrameAsBase64(videoEl) {
 
 // ─── DUBAI SCORING CAMERA TAB ─────────────────────────────────────────────────
 
-function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAction }) {
+function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAction, heldDiscard = null }) {
   const [mode, setMode] = useState("home");
   const [cameraActive, setCameraActive] = useState(false);
   const [analysing, setAnalysing] = useState(false);
@@ -1212,16 +1382,56 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
   const [prefilledAnswers, setPrefilledAnswers] = useState({});
   const [capturedThumb, setCapturedThumb] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
-  const [selectedWinner, setSelectedWinner] = useState(null);
-  const [selectedWinType, setSelectedWinType] = useState(null);
-  const [selectedDiscarder, setSelectedDiscarder] = useState(null);
+  const [selectedWinners, setSelectedWinners] = useState([]);
+  const [selectedWinType, setSelectedWinType] = useState(heldDiscard ? "discard" : null);
+  const [selectedDiscarder, setSelectedDiscarder] = useState(heldDiscard?.discarderId ?? null);
+  const [winnerScores, setWinnerScores] = useState({});
+  const [scoringIdx, setScoringIdx] = useState(0);
   const [manualPts, setManualPts] = useState("");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const selectedWinner = selectedWinners[scoringIdx] ?? selectedWinners[0] ?? null;
+
+  useEffect(() => {
+    if (!heldDiscard) return;
+    setSelectedWinType("discard");
+    setSelectedDiscarder(heldDiscard.discarderId);
+    setSelectedWinners([]);
+    setScoringIdx(0);
+    setWinnerScores({});
+    setMode("home");
+  }, [heldDiscard]);
 
   const finishScore = (score) => {
+    const ids = selectedWinners.length ? selectedWinners : (selectedWinner ? [selectedWinner] : []);
+    if (!ids.length) {
+      if (onScore) onScore(score, { winnerId: null, winType: selectedWinType, discarderId: selectedDiscarder });
+      return;
+    }
+    if (ids.length > 1) {
+      const nextScores = { ...winnerScores, [ids[scoringIdx]]: score };
+      if (scoringIdx + 1 < ids.length) {
+        setWinnerScores(nextScores);
+        setScoringIdx(i => i + 1);
+        setManualPts("");
+        setPrefilledAnswers({});
+        setAiResult(null);
+        setMode("home");
+        return;
+      }
+      if (onScore) onScore(score, {
+        winnerId: ids[0],
+        winnerIds: ids,
+        scoresByWinner: nextScores,
+        winType: selectedWinType,
+        discarderId: selectedDiscarder,
+      });
+      return;
+    }
     if (onScore) onScore(score, {
-      winnerId: selectedWinner,
+      winnerId: ids[0],
+      winnerIds: ids,
+      scoresByWinner: { [ids[0]]: score },
       winType: selectedWinType,
       discarderId: selectedDiscarder,
     });
@@ -1237,7 +1447,6 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
     if (!winner) return withWin;
     return {
       ...withWin,
-      east: winner.windId === "E",
       _winnerName: winner.name,
       _winnerSeat: winner.windId,
       _roundWind: roundWind,
@@ -1358,22 +1567,55 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
 
   const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
 
+  const scoringName = players.find(p => p.id === selectedWinner)?.name;
   const winnerBlock = players.length > 0 && (
     <div className="mj-card" style={{padding:16,marginBottom:12}}>
-      <div style={{fontSize:12,color:"var(--mj-muted)",letterSpacing:0.2,fontWeight:600,marginBottom:10}}>Who won?</div>
+      {heldDiscard && (
+        <div style={{marginBottom:12,padding:"10px 12px",borderRadius:12,background:"#FFF6E5",
+          border:"1px solid rgba(183,121,31,0.3)",fontSize:13,color:"#8A5A12",fontWeight:700,lineHeight:1.45}}>
+          Same discard — score the next winner. East does not pass until this tile is done.
+        </div>
+      )}
+      {selectedWinners.length > 1 && (
+        <div style={{marginBottom:12,padding:"10px 12px",borderRadius:12,background:"#F4F1EA",
+          fontSize:13,color:"var(--mj-ink)",fontWeight:700}}>
+          Scoring {scoringName || "next winner"} · {scoringIdx + 1} of {selectedWinners.length}
+        </div>
+      )}
+      <div style={{fontSize:12,color:"var(--mj-muted)",letterSpacing:0.2,fontWeight:600,marginBottom:6}}>
+        {selectedWinType==="discard" || !selectedWinType ? "Who won? Tap every winner on this tile." : "Who won?"}
+      </div>
+      {(selectedWinType==="discard" || !selectedWinType) && (
+        <div style={{fontSize:11,color:"var(--mj-muted)",marginBottom:10,lineHeight:1.45}}>
+          A discard can be won by more than one player. Self-pick is one winner only.
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-        {players.map(p=>{
-          const isSel = selectedWinner===p.id;
+        {players.filter(p => !(heldDiscard?.winnerIds || []).includes(p.id)).map(p=>{
+          const isSel = selectedWinners.includes(p.id);
+          const lockedOut = selectedWinType==="discard" && selectedDiscarder===p.id;
           return (
-            <button key={p.id} onClick={()=>{ setSelectedWinner(p.id); if(selectedDiscarder===p.id) setSelectedDiscarder(null); }}
+            <button key={p.id} disabled={lockedOut}
+              onClick={()=>{
+                setSelectedWinners(cur => {
+                  if (selectedWinType === "self_pick") return [p.id];
+                  if (cur.includes(p.id)) return cur.filter(id => id !== p.id);
+                  return [...cur, p.id];
+                });
+                setScoringIdx(0);
+                setWinnerScores({});
+                if (selectedDiscarder === p.id) setSelectedDiscarder(null);
+              }}
               style={{padding:"12px 10px",borderRadius:12,border:`1.5px solid ${isSel?p.color:"var(--mj-line)"}`,
-                background:isSel?`${p.color}25`:"transparent",cursor:"pointer",textAlign:"left"}}>
+                background:isSel?`${p.color}25`:"transparent",cursor:lockedOut?"default":"pointer",textAlign:"left",
+                opacity:lockedOut?0.4:1}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
                 <span style={{fontSize:16}}>{WINDS_MAP[p.windId]||"🀀"}</span>
                 <span style={{fontSize:15,fontWeight:700,color:isSel?p.color:"var(--mj-ink)"}}>{p.name}</span>
               </div>
               <div style={{fontSize:10,color:"var(--mj-muted)"}}>
                 {p.windId==="E"?"East · Dealer":p.windId==="S"?"South":p.windId==="W"?"West":"North"}
+                {isSel && selectedWinners.length>1 ? ` · win ${selectedWinners.indexOf(p.id)+1}` : ""}
               </div>
             </button>
           );
@@ -1382,15 +1624,23 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
       <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>How did they win?</div>
       <div style={{display:"flex",gap:8,marginBottom: selectedWinType==="discard"?12:0}}>
         {[
-          {id:"self_pick", label:"Self pick", sub:"All 3 pay. East seat +1"},
-          {id:"discard", label:"Discard", sub:"Only discarder pays"},
+          {id:"self_pick", label:"Self pick", sub:"All 3 pay the score"},
+          {id:"discard", label:"Discard", sub:"Discarder pays each winner"},
         ].map(wt=>{
           const sel = selectedWinType===wt.id;
+          const lockSelf = !!heldDiscard && wt.id==="self_pick";
           return (
-            <button key={wt.id} onClick={()=>{ setSelectedWinType(wt.id); if(wt.id!=="discard") setSelectedDiscarder(null); }}
-              style={{flex:1,padding:"12px 10px",borderRadius:12,textAlign:"left",cursor:"pointer",
+            <button key={wt.id} disabled={lockSelf}
+              onClick={()=>{
+                setSelectedWinType(wt.id);
+                if (wt.id !== "discard") {
+                  setSelectedDiscarder(null);
+                  setSelectedWinners(cur => cur.slice(0, 1));
+                }
+              }}
+              style={{flex:1,padding:"12px 10px",borderRadius:12,textAlign:"left",cursor:lockSelf?"default":"pointer",
                 border:`1.5px solid ${sel?game.color:"var(--mj-line)"}`,
-                background:sel?`${game.color}20`:"transparent"}}>
+                background:sel?`${game.color}20`:"transparent",opacity:lockSelf?0.4:1}}>
               <div style={{fontSize:14,fontWeight:700,color:sel?game.accent:"var(--mj-ink)",marginBottom:3}}>{wt.label}</div>
               <div style={{fontSize:10,color:"var(--mj-muted)",lineHeight:1.4}}>{wt.sub}</div>
             </button>
@@ -1401,7 +1651,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
         <div>
           <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Who discarded?</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {players.filter(p=>p.id!==selectedWinner).map(p=>{
+            {players.filter(p=>!selectedWinners.includes(p.id)).map(p=>{
               const sel = selectedDiscarder===p.id;
               return (
                 <button key={p.id} onClick={()=>setSelectedDiscarder(p.id)}
@@ -1468,7 +1718,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
   if (mode === "enter") {
     const pts = Number(manualPts);
     const ptsOk = Number.isFinite(pts) && pts > 0;
-    const winOk = !players.length || (selectedWinner && selectedWinType && (selectedWinType !== "discard" || selectedDiscarder));
+    const winOk = !players.length || (selectedWinners.length && selectedWinType && (selectedWinType !== "discard" || selectedDiscarder));
     return (
       <div>
         {winnerBlock}
@@ -1694,9 +1944,9 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {players.map(p=>{
                     const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
-                    const isSelected = selectedWinner===p.id;
+                    const isSelected = selectedWinners.includes(p.id);
                     return (
-                      <button key={p.id} onClick={()=>setSelectedWinner(p.id)}
+                      <button key={p.id} onClick={()=>setSelectedWinners(cur => selectedWinType==="self_pick" ? [p.id] : (cur.includes(p.id) ? cur.filter(id=>id!==p.id) : [...cur, p.id]))}
                         style={{padding:"6px 12px",borderRadius:20,
                           border:`1.5px solid ${isSelected?p.color:"var(--mj-line)"}`,
                           background:isSelected?`${p.color}25`:"transparent",
@@ -1738,16 +1988,19 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
       )}
       <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai Scoring Wizard</div>
       <DxbWizard
+        key={`wiz-${selectedWinner || "x"}-${scoringIdx}`}
         accentColor={game.color}
         accent={game.accent}
         prefilled={prefilledAnswers}
         aiResult={aiResult}
         onDone={(score)=>{
+          const ids = selectedWinners;
+          const more = ids.length > 1 && scoringIdx + 1 < ids.length;
           finishScore(score);
-          setMode("home");
           setAiResult(null);
           setCapturedThumb(null);
           setPrefilledAnswers({});
+          if (!more) setMode("home");
         }}
       />
       <button onClick={()=>setMode("home")}
@@ -1801,23 +2054,23 @@ const GAMES = [
 // ─── DUBAI SCORING REFERENCE ─────────────────────────────────────────────────
 const DXB_REF = [
   { section:"Always Add First", items:[{name:"Mahjong / Winning",pts:5},{name:"Closing / Calling your hand",pts:5}] },
-  { section:"Winning Tile", items:[{name:"East / Dealer wins (or East discards)",pts:1},{name:"Self Pick from Wall",pts:5},{name:"Self Pick from Flower Wall",pts:10},{name:"Concealed Hand — Discard win",pts:10},{name:"Concealed Hand — Self Pick",pts:15},{name:"Fully Exposed — Discard win",pts:10},{name:"Fully Exposed — Self Pick",pts:15},{name:"Win within 7 tiles in the sea",pts:50},{name:"Seabed — last tile from wall",pts:20},{name:"Earthly — first discard by East",pts:90},{name:"Heavenly — dealer on deal",pts:100}] },
-  { section:"Flowers", items:[{name:"Each Flower tile",pts:1},{name:"Flower of player's seat (+1 bonus each)",pts:"+1"},{name:"Mixed Bouquet (red+blue 1-4)",pts:5},{name:"Pure Bouquet (full set same colour)",pts:10},{name:"7 Flowers — Instant Win",pts:20},{name:"8 Flowers — Instant Win",pts:40},{name:"No Flowers",pts:1},{name:"No Honour tiles",pts:1},{name:"No Flowers AND No Honours",pts:5},{name:"No Flowers/Honours in All Sheung",pts:15}] },
-  { section:"Pair / Eyes", items:[{name:"Good Eyes — pair of 2s, 5s, or 8s (any suit)",pts:2},{name:"True Single Wait",pts:2},{name:"Calling by Pairs",pts:2}] },
-  { section:"Suit Hands", items:[{name:"2 Suits — no winds or dragons (flowers OK)",pts:8},{name:"2 Suits — no flowers, no honours",pts:15},{name:"Semi Pure — One Suit + Honours",pts:30},{name:"Pure Suit — One Suit Only",pts:90},{name:"All 5 Suits (3 suits + winds + dragons)",pts:10}] },
-  { section:"Sheung (Sequence) Hands", items:[{name:"All Sheung Hand",pts:5},{name:"All Sheung — No Honours, No Flowers",pts:15},{name:"Step Up (3 sequential sheungs, any suit)",pts:5},{name:"All Step Up (5 sheungs)",pts:20},{name:"All Step Up — Same Suit",pts:90}] },
-  { section:"Dragon Run (1-9 complete run)", items:[{name:"Mixed Dragon — Exposed/Partial",pts:8},{name:"Mixed Dragon — Concealed",pts:10},{name:"Pure Dragon — Exposed/Partial",pts:15},{name:"Pure Dragon — Concealed",pts:20}] },
+  { section:"Winning Tile", items:[{name:"Self Pick from Wall",pts:5},{name:"Self Pick from Flower Wall",pts:5},{name:"Concealed Hand — Discard win",pts:5},{name:"Concealed Hand — Self Pick",pts:10},{name:"Fully Exposed / Last Man Standing",pts:15},{name:"Win within 7 tiles in the sea",pts:50},{name:"Human Hand — within 4 tiles",pts:80},{name:"Seabed — last tile from wall",pts:20},{name:"Rob a Gong",pts:10},{name:"Earthly — first discard by East",pts:90},{name:"Heavenly — dealer on deal",pts:100}] },
+  { section:"Flowers", items:[{name:"Each Flower tile",pts:1},{name:"Flower of player's seat (+1 bonus each)",pts:"+1"},{name:"Mixed Bouquet (red+blue 1-4)",pts:5},{name:"Pure Bouquet (full set same colour)",pts:10},{name:"7 Flowers — Instant Win (20 E / 22 S / 24 W / 26 N)",pts:"20–26"},{name:"8 Flowers — Instant Win",pts:40},{name:"No Flowers",pts:1},{name:"No Honour tiles",pts:1},{name:"No Flowers AND No Honours",pts:5},{name:"No Flowers/Honours in All Sheung (includes the 5)",pts:15}] },
+  { section:"Pair / Eyes", items:[{name:"Good Eyes — pair of 2s, 5s, or 8s (any suit)",pts:2},{name:"True Single Wait",pts:2},{name:"False Single Wait (min 3 tiles)",pts:2},{name:"Calling by Pairs",pts:2}] },
+  { section:"Suit Hands", items:[{name:"2 Suits — no winds or dragons (flowers OK)",pts:5},{name:"2 Suits — no flowers, no honours",pts:15},{name:"Semi Pure — One Suit + Honours",pts:30},{name:"Pure Suit — One Suit Only",pts:90},{name:"All 5 Suits (3 suits + winds + dragons)",pts:10},{name:"Pure Honour — winds and dragons only",pts:140}] },
+  { section:"Sheung (Sequence) Hands", items:[{name:"All Sheung Hand",pts:5},{name:"All Sheung — No Honours, No Flowers",pts:15},{name:"Step Up (3 sequential sheungs, any suit)",pts:5},{name:"All Step Up (5 sheungs)",pts:20}] },
+  { section:"Dragon Run (1-9 complete run — mix and pure can both count)", items:[{name:"Mixed Dragon — Exposed/Partial",pts:5},{name:"Mixed Dragon — Concealed",pts:10},{name:"Pure Dragon — Exposed/Partial",pts:15},{name:"Pure Dragon — Concealed",pts:20}] },
   { section:"Brothers (Same Suit Sheungs)", items:[{name:"2 Sets Brother Sheungs",pts:5},{name:"3 Sets Brother Sheungs",pts:15},{name:"4 Sets Brother Sheungs",pts:30}] },
-  { section:"Sisters (Diff Suit Same Sheungs)", items:[{name:"2 Sets Sister Sheungs",pts:5},{name:"3 Sets Sister Sheungs",pts:15},{name:"4 Sets Sister Sheungs",pts:30},{name:"5 Sets Sister Sheungs",pts:50}] },
+  { section:"Sisters (Diff Suit Same Sheungs)", items:[{name:"2 Sets Sister Sheungs",pts:3},{name:"3 Sets Sister Sheungs",pts:10},{name:"4 Sets Sister Sheungs",pts:25},{name:"5 Sets Sister Sheungs",pts:40}] },
   { section:"Pong (Triplet) Hands", items:[{name:"All Pong Hand (5 pongs + pair)",pts:25}] },
   { section:"Winds (per Pong)", items:[{name:"Pong of any Wind",pts:1},{name:"+1 if it's your Seat Wind",pts:"+1"},{name:"+1 if it's the Round Wind",pts:"+1"},{name:"Little 3 Winds (2 pongs + pair)",pts:15},{name:"Big 3 Winds (3 pongs)",pts:30},{name:"Little 4 Winds (3 pongs + pair)",pts:60},{name:"Big 4 Winds (4 pongs)",pts:80}] },
   { section:"Dragons (per Pong)", items:[{name:"Pong of any Dragon",pts:2},{name:"Little Dragon (2 pongs + pair)",pts:20},{name:"Big Dragon (3 pongs)",pts:40}] },
   { section:"Sister Pongs (Diff Suit)", items:[{name:"2 Sets Sister Pongs",pts:5},{name:"3 Sets Sister Pongs",pts:15}] },
   { section:"Uncle Pongs (Same Suit Sequential)", items:[{name:"111+222 (2 sets)",pts:5},{name:"111+222+333 (3 sets)",pts:15},{name:"...+444 (4 sets)",pts:30},{name:"...+555 (5 sets)",pts:60},{name:"...+55+66 pair (5+pair)",pts:80}] },
   { section:"Concealed Pongs", items:[{name:"2 Concealed Pongs",pts:5},{name:"3 Concealed Pongs",pts:15},{name:"4 Concealed Pongs",pts:30},{name:"5 Concealed Pongs",pts:80},{name:"5 Concealed Pongs — Self Draw, No Gong",pts:100}] },
-  { section:"Gong (Kong = 4 of same)", items:[{name:"Open Gong (counts as 1 Concealed Pong)",pts:1},{name:"Concealed Gong (+collect 5 pts each immediately)",pts:1},{name:"Win by Robbing a Gong",pts:10},{name:"Win by Self Drawing a Gong",pts:30},{name:"Four in 2 Ways (same 4 tiles = Sheung+Pong)",pts:5},{name:"Four in 3 Ways (2 Sheungs + pair)",pts:15},{name:"Four in 4 Ways (4 Sheungs)",pts:20}] },
-  { section:"Terminals (1s and 9s)", items:[{name:"No Terminal Tiles (with honours OK)",pts:5},{name:"No Terminals AND No Honours",pts:8},{name:"All Terminals WITH Honours",pts:20},{name:"All Terminals — No Honours",pts:40},{name:"1×Terminal Pong Set (111+999 same suit)",pts:5},{name:"2×Terminal Pong Sets (mix)",pts:20},{name:"1×Terminal Sheung (123+789 same suit)",pts:5},{name:"2×Terminal Pure Sheung Sets",pts:20}] },
-  { section:"Special Hands", items:[{name:"Nico Nico (7 pairs + 1 pong) — No Closing",pts:40},{name:"Nico Nico + 1 Gong",pts:"+10"},{name:"Nico Nico + 2 Gongs",pts:"+25"},{name:"13 Orphans — No Closing",pts:90},{name:"16 Orphans — No Closing",pts:50},{name:"16 Orphans with 1s & 9s in all suits",pts:"+10"},{name:"Jade Hand (Green Dragon pong + all Bamboo)",pts:20},{name:"Ruby Hand (Red Dragon pong + all Characters)",pts:20},{name:"Diamond Hand (White Dragon pong + all Circles)",pts:20}] },
+  { section:"Gong (Kong = 4 of same)", items:[{name:"Open Gong (counts as 1 Concealed Pong)",pts:1},{name:"Concealed Gong (+collect 5 pts each immediately)",pts:2},{name:"Win by Robbing a Gong",pts:10},{name:"Four in 2 Ways (same 4 tiles = Sheung+Pong)",pts:5},{name:"Four in 3 Ways (2 Sheungs + pair)",pts:15},{name:"Four in 4 Ways (4 Sheungs)",pts:20}] },
+  { section:"Terminals (1s and 9s)", items:[{name:"No Terminal Tiles (with honours OK)",pts:5},{name:"Simple hand — No Terminals AND No Honours",pts:5},{name:"All Terminals WITH Honours",pts:20},{name:"All Terminals — No Honours",pts:40},{name:"1×Terminal Pong Set (111+999 same suit)",pts:5},{name:"2×Terminal Pong Sets (mix)",pts:20},{name:"1×Terminal Sheung (123+789 same suit)",pts:5},{name:"2×Terminal Pure Sheung Sets",pts:20}] },
+  { section:"Special Hands", items:[{name:"Nico Nico (7 pairs + 1 pong) — No Closing",pts:40},{name:"Nico Nico + 1 Gong",pts:"+10"},{name:"Nico Nico + 2 Gongs",pts:"+25"},{name:"13 Orphans — No Closing",pts:90},{name:"16 Orphans — No Closing",pts:50},{name:"16 Orphans sister sheungs",pts:"+5"},{name:"16 Orphans with 1s & 9s in all suits",pts:"+10"},{name:"Jade Hand (Green Dragon pong + all Bamboo)",pts:20},{name:"Ruby Hand (Red Dragon pong + all Characters)",pts:20},{name:"Diamond Hand (White Dragon pong + all Circles)",pts:20},{name:"Chicken Hand (only 1 pt before Mahjong)",pts:20}] },
   { section:"Penalties", items:[{name:"False Mahjong — 25 to each other player (dealer stays)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
   { section:"Draw / Bank", items:[
     {name:"Draw / wall out — each pays 5 into the Bank, East moves",pts:-5},
@@ -1842,7 +2095,7 @@ const DXB_HANDS = [
     groups:[{label:"sheung 1",tiles:[{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4}]},{label:"sheung 2 (+1)",tiles:[{suit:"man",n:3},{suit:"man",n:4},{suit:"man",n:5}]},{label:"sheung 3 (+1)",tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6}]},{label:"sheung",tiles:[{suit:"man",n:7},{suit:"man",n:8},{suit:"man",n:9}]},{label:"sheung",tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3}]},{label:"pair",tiles:[{suit:"bam",n:8},{suit:"bam",n:8}]}]},
   { name:"All Step-Up Hand", pts:20, cat:"sheung", desc:"All 5 melds are sheungs stepping up in order. Can be exposed or concealed.",
     groups:[{label:"step 1",tiles:[{suit:"man",n:2},{suit:"man",n:3},{suit:"man",n:4}]},{label:"step 2",tiles:[{suit:"pin",n:3},{suit:"pin",n:4},{suit:"pin",n:5}]},{label:"step 3",tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6}]},{label:"step 4",tiles:[{suit:"man",n:5},{suit:"man",n:6},{suit:"man",n:7}]},{label:"step 5",tiles:[{suit:"pin",n:6},{suit:"pin",n:7},{suit:"pin",n:8}]},{label:"pair",tiles:[{suit:"bam",n:9},{suit:"bam",n:9}]}]},
-  { name:"Mixed Dragon Run", pts:8, cat:"dragon", desc:"Complete 1-9 run across ALL three suits. Exposed or partially concealed.",
+  { name:"Mixed Dragon Run", pts:5, cat:"dragon", desc:"Complete 1-9 run across ALL three suits. Exposed or partially concealed. Can also take Pure Dragon if both are in the hand.",
     groups:[{label:"1-3 (pin)",tiles:[{suit:"pin",n:1},{suit:"pin",n:2},{suit:"pin",n:3}]},{label:"4-6 (man)",tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6}]},{label:"7-9 (bam)",tiles:[{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}]},{label:"sheung",tiles:[{suit:"man",n:2},{suit:"man",n:3},{suit:"man",n:4}]},{label:"sheung",tiles:[{suit:"pin",n:5},{suit:"pin",n:6},{suit:"pin",n:7}]},{label:"pair",tiles:[{suit:"bam",n:5},{suit:"bam",n:5}]}]},
   { name:"Pure Dragon Run — Concealed", pts:20, cat:"dragon", desc:"Complete 1-9 run all in the same suit. Fully concealed = 20 pts.",
     groups:[{label:"1-2-3",tiles:[{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3}]},{label:"4-5-6",tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6}]},{label:"7-8-9",tiles:[{suit:"bam",n:7},{suit:"bam",n:8},{suit:"bam",n:9}]},{label:"sheung",tiles:[{suit:"pin",n:3},{suit:"pin",n:4},{suit:"pin",n:5}]},{label:"sheung",tiles:[{suit:"man",n:6},{suit:"man",n:7},{suit:"man",n:8}]},{label:"pair",tiles:[{suit:"bam",n:5},{suit:"bam",n:5}]}]},
@@ -2028,6 +2281,7 @@ function historyLabel(r) {
   if (r.type === "chase") return r.chaseKind === "suit" ? "Chasing suit" : "Chasing wind/dragon";
   if (r.type === "gong") return "Concealed Gong";
   if (r.type === "adjust") return "Manual adjust";
+  if (r.winnerIds?.length > 1) return `Win · ${r.winnerIds.length} winners`;
   if (r.winnerId) return "Win";
   return "Hand";
 }
@@ -3098,6 +3352,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [handFilter, setHandFilter] = useState("all");
   const [expandedHand, setExpandedHand] = useState(null);
   const [pendingScore, setPendingScore] = useState(null);
+  const [heldDiscard, setHeldDiscard] = useState(null);
   const [pendingPayment, setPendingPayment] = useState(null);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [showSetup, setShowSetup] = useState(freshStart || !saved);
@@ -3198,26 +3453,30 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     {id:"you",label:"You",icon:"you"},
   ];
 
-  // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
-  // Dubai rules:
-  // - Self-pick: all 3 losers pay the full score. East SEAT pays score + 1 extra.
-  // - Discard win: only the discarder pays the score. No East double.
+  // Dubai / Anetum / Mahjong Mates:
+  // - Self-pick: all 3 pay the full score. No East +1.
+  // - Discard: only the discarder pays. Up to 3 players can win the same discard.
 
-  const calcPayments = (score, winnerId, winType, discarderId) => {
-    const winner = players.find(p => p.id === winnerId);
-    if (!winner) return [];
+  const calcPayments = (score, winnerId, winType, discarderId, opts = {}) => {
+    const winnerIds = (opts.winnerIds?.length ? opts.winnerIds : (winnerId ? [winnerId] : []))
+      .map(Number)
+      .filter(id => players.some(p => p.id === id));
+    const scores = opts.scoresByWinner || {};
+    if (!winnerIds.length) return [];
     const payments = [];
 
     if (winType === "self_pick") {
-      // All 3 losers pay full score. East seat pays +1 extra.
-      players.filter(p => p.id !== winnerId).forEach(loser => {
-        const amt = loser.windId === "E" ? score + 1 : score;
-        payments.push({ fromId: loser.id, toId: winnerId, amount: amt });
+      const wid = winnerIds[0];
+      const amt = Number(scores[wid] ?? score);
+      players.filter(p => p.id !== wid).forEach(loser => {
+        payments.push({ fromId: loser.id, toId: wid, amount: amt });
       });
     } else {
-      const discarder = players.find(p => p.id === discarderId);
-      if (!discarder) return [];
-      payments.push({ fromId: discarderId, toId: winnerId, amount: score });
+      if (!players.some(p => p.id === discarderId)) return [];
+      winnerIds.forEach(wid => {
+        if (wid === discarderId) return;
+        payments.push({ fromId: discarderId, toId: wid, amount: Number(scores[wid] ?? score) });
+      });
     }
 
     return payments;
@@ -3231,11 +3490,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const WIND_ORDER = ["E","S","W","N"];
 
   const rotateDealerIfNeeded = (winnerId, newPlayers) => {
-    const winner = newPlayers.find(p => p.id === winnerId);
-    const eastPlayer = newPlayers.find(p => p.windId === "E");
-    
-    // If East won — no rotation, East keeps deal
-    if (winner && winner.windId === "E") return { rotatedPlayers: newPlayers, newRoundWind: roundWind };
+    const winnerIds = Array.isArray(winnerId) ? winnerId : (winnerId ? [winnerId] : []);
+    const eastWon = winnerIds.some(id => newPlayers.find(p => p.id === id)?.windId === "E");
+    if (eastWon) return { rotatedPlayers: newPlayers, newRoundWind: roundWind };
 
     // Rotate all seats: E→N, S→E, W→S, N→W (anti-clockwise shift)
     const rotated = newPlayers.map(p => {
@@ -3263,16 +3520,17 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     return { rotatedPlayers: rotated, newRoundWind };
   };
 
-  const applyPayments = (payments, winnerId, winType) => {
+  const applyPayments = (payments, winnerId, winType, opts = {}) => {
+    const winnerIds = (opts.winnerIds?.length ? opts.winnerIds : (winnerId ? [winnerId] : [])).map(Number);
     const deltas = {};
     payments.forEach(({ fromId, toId, amount }) => {
       deltas[fromId] = (deltas[fromId] || 0) - amount;
       deltas[toId]   = (deltas[toId]   || 0) + amount;
     });
 
-    const takeBank = winType === "self_pick" && bank > 0;
+    const takeBank = winType === "self_pick" && bank > 0 && !opts.holdRound;
     const bankTaken = takeBank ? bank : 0;
-    if (takeBank) deltas[winnerId] = (deltas[winnerId] || 0) + bankTaken;
+    if (takeBank) deltas[winnerIds[0]] = (deltas[winnerIds[0]] || 0) + bankTaken;
 
     const updatedPlayers = players.map(p => ({
       ...p, score: p.score + (deltas[p.id] || 0)
@@ -3282,14 +3540,33 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       pid: p.id, name: p.name, delta: deltas[p.id] || 0
     }));
 
-    // Rotate dealer
-    const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(winnerId, updatedPlayers);
-
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
-    const winner = players.find(p => p.id === winnerId);
-    const nextStreak = winner?.windId === "E" ? dealerStreak + 1 : 0;
+    const eastWon = winnerIds.some(id => players.find(p => p.id === id)?.windId === "E");
+
+    if (opts.holdRound && winType === "discard") {
+      setRoundHistory(h => [...h, {
+        id: Date.now(), type: "win", round, entries, payments,
+        winnerId: winnerIds[0], winnerIds, holdRound: true,
+        windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
+        bankBefore: bank, bankAfter: bank, bankTaken: 0,
+      }]);
+      setPlayers(updatedPlayers);
+      setHeldDiscard({
+        discarderId: opts.discarderId,
+        winnerIds: [...(heldDiscard?.winnerIds || []), ...winnerIds].filter((id, i, a) => a.indexOf(id) === i),
+      });
+      setPendingPayment(null);
+      setPendingScore(null);
+      setTab("score");
+      return;
+    }
+
+    const rotateIds = [...(heldDiscard?.winnerIds || []), ...winnerIds].filter((id, i, a) => a.indexOf(id) === i);
+    const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(rotateIds, updatedPlayers);
+    const nextStreak = rotateIds.some(id => players.find(p => p.id === id)?.windId === "E") ? dealerStreak + 1 : 0;
     setRoundHistory(h => [...h, {
-      id: Date.now(), type: "win", round, entries, payments, winnerId,
+      id: Date.now(), type: "win", round, entries, payments,
+      winnerId: winnerIds[0], winnerIds: rotateIds,
       windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
       bankBefore: bank, bankAfter: takeBank ? 0 : bank, bankTaken,
     }]);
@@ -3298,6 +3575,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setDealerStreak(nextStreak);
     if (takeBank) setBank(0);
     setRound(r => r + 1);
+    setHeldDiscard(null);
     setPendingPayment(null);
     setPendingScore(null);
   };
@@ -3362,6 +3640,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setScoreInputs({});
     setPendingPayment(null);
     setPendingScore(null);
+    setHeldDiscard(null);
     setTableAction(null);
     setActionDraft({});
     setShowSetup(true);
@@ -3389,6 +3668,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setRoundHistory(h => h.slice(0, -1));
     setPendingPayment(null);
     setPendingScore(null);
+    setHeldDiscard(null);
     setTableAction(null);
   };
 
@@ -3396,21 +3676,31 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setShowScoreSheet(false);
     setTableAction(null);
     setActionDraft({});
+    const winnerIds = (meta.winnerIds?.length ? meta.winnerIds : (meta.winnerId ? [meta.winnerId] : []))
+      .map(Number);
+    const discarderId = meta.discarderId ?? heldDiscard?.discarderId ?? null;
+    const winType = meta.winType ?? (heldDiscard ? "discard" : null);
+    const scoresByWinner = meta.scoresByWinner || (winnerIds.length === 1 ? { [winnerIds[0]]: score } : {});
     const pending = {
       pts: score,
-      _winnerId: meta.winnerId ?? null,
-      _winType: meta.winType ?? null,
-      _discarderId: meta.discarderId ?? null,
+      _winnerId: winnerIds[0] ?? null,
+      _winnerIds: winnerIds,
+      _winType: winType,
+      _discarderId: discarderId,
+      _scoresByWinner: scoresByWinner,
     };
     setPendingScore(pending);
-    const canPay = pending._winnerId && pending._winType
-      && (pending._winType !== "discard" || pending._discarderId);
+    const canPay = winnerIds.length && winType
+      && (winType !== "discard" || discarderId);
     if (canPay) {
       setPendingPayment({
         score,
-        payments: calcPayments(score, pending._winnerId, pending._winType, pending._discarderId),
-        winnerId: pending._winnerId,
-        winType: pending._winType,
+        payments: calcPayments(score, winnerIds[0], winType, discarderId, { winnerIds, scoresByWinner }),
+        winnerId: winnerIds[0],
+        winnerIds,
+        scoresByWinner,
+        winType,
+        discarderId,
       });
     } else {
       setPendingPayment(null);
@@ -3655,16 +3945,22 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   <button
                     onClick={()=>{
                       const pts = Number(pendingScore?.pts ?? pendingScore);
+                      const winnerIds = pendingScore._winnerIds?.length ? pendingScore._winnerIds : [pendingScore._winnerId];
+                      const scoresByWinner = pendingScore._scoresByWinner || {};
                       const payments = calcPayments(
                         pts,
                         pendingScore._winnerId,
                         pendingScore._winType,
-                        pendingScore._discarderId
+                        pendingScore._discarderId,
+                        { winnerIds, scoresByWinner }
                       );
                       setPendingPayment({
                         score: pts, payments,
                         winnerId: pendingScore._winnerId,
+                        winnerIds,
+                        scoresByWinner,
                         winType: pendingScore._winType,
+                        discarderId: pendingScore._discarderId,
                       });
                     }}
                     style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
@@ -3688,10 +3984,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   const to   = players.find(p=>p.id===pay.toId);
                   if(!from||!to) return null;
                   const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
-                  // Explain why this amount
-                  const baseScore = pendingPayment.score;
-                  let reason = "";
-                  if(pay.amount === baseScore + 1) reason = "East seat +1";
+                  const reason = (pendingPayment.winnerIds || []).length > 1
+                    ? `To ${to.name}`
+                    : "";
                   return (
                     <div key={i} style={{display:"flex",alignItems:"center",gap:10,
                       padding:"9px 0",borderBottom:"0.5px solid var(--mj-line)"}}>
@@ -3745,26 +4040,47 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 )}
                 {/* Dealer rotation notice */}
                 {(() => {
-                  const winner = players.find(p=>p.id===pendingPayment.winnerId);
-                  const eastWon = winner?.windId === "E";
+                  const ids = [...(heldDiscard?.winnerIds || []), ...(pendingPayment.winnerIds || [pendingPayment.winnerId])];
+                  const eastWon = ids.some(id => players.find(p=>p.id===id)?.windId === "E");
+                  const multi = (pendingPayment.winnerIds || []).length > 1;
                   return (
                     <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
                       background:eastWon?"rgba(245,201,122,0.1)":"rgba(100,180,100,0.1)",
                       border:`0.5px solid ${eastWon?"rgba(245,201,122,0.3)":"rgba(100,180,100,0.3)"}`,
                       fontSize:12,color:eastWon?"#F5C97A":"#8FBC8F"}}>
                       {eastWon
-                        ? "🎴 East won — dealer keeps the deal, seats stay the same"
-                        : "🔄 Dealer passes to next seat after this round"}
+                        ? "🎴 East is among the winners — dealer keeps the deal"
+                        : "🔄 Dealer passes to next seat after this tile is fully paid"}
+                      {multi ? " · Discarder pays each winner." : ""}
                     </div>
                   );
                 })()}
-                <div style={{display:"flex",gap:10,marginTop:12}}>
-                  <button onClick={()=>{setPendingPayment(null);setPendingScore(null);}}
-                    style={{flex:1,padding:10,background:"none",border:"0.5px solid var(--mj-line)",borderRadius:10,color:"var(--mj-muted)",fontSize:12,cursor:"pointer"}}>Cancel</button>
-                  <button onClick={()=>applyPayments(pendingPayment.payments, pendingPayment.winnerId, pendingPayment.winType)}
-                    style={{flex:2,padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                    Confirm & update scores ✓
-                  </button>
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>
+                  {pendingPayment.winType === "discard" && (pendingPayment.winnerIds || [pendingPayment.winnerId]).length < 3 && (
+                    <button onClick={()=>applyPayments(
+                      pendingPayment.payments,
+                      pendingPayment.winnerId,
+                      pendingPayment.winType,
+                      { holdRound: true, winnerIds: pendingPayment.winnerIds || [pendingPayment.winnerId], discarderId: pendingPayment.discarderId || pendingScore?._discarderId }
+                    )}
+                      style={{width:"100%",padding:11,background:"#FFFFFF",border:`1.5px solid ${game.color}`,
+                        borderRadius:10,color:game.accent,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                      Pay this winner — someone else also won
+                    </button>
+                  )}
+                  <div style={{display:"flex",gap:10}}>
+                    <button onClick={()=>{setPendingPayment(null);setPendingScore(null);}}
+                      style={{flex:1,padding:10,background:"none",border:"0.5px solid var(--mj-line)",borderRadius:10,color:"var(--mj-muted)",fontSize:12,cursor:"pointer"}}>Cancel</button>
+                    <button onClick={()=>applyPayments(
+                      pendingPayment.payments,
+                      pendingPayment.winnerId,
+                      pendingPayment.winType,
+                      { winnerIds: pendingPayment.winnerIds || [pendingPayment.winnerId], discarderId: pendingPayment.discarderId }
+                    )}
+                      style={{flex:2,padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                      Confirm & update scores ✓
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -3802,6 +4118,16 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 );
               })}
             </div>
+
+            {heldDiscard && pendingScore === null && pendingPayment === null && (
+              <div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"#FFF6E5",
+                border:"1px solid rgba(183,121,31,0.3)"}}>
+                <div style={{fontSize:14,fontWeight:800,color:"#8A5A12",marginBottom:4}}>Same discard still open</div>
+                <div style={{fontSize:13,color:"#8A5A12",lineHeight:1.45}}>
+                  Score the next player who won on that tile. East does not pass until you confirm the last winner.
+                </div>
+              </div>
+            )}
 
             {pendingScore === null && pendingPayment === null && !showSetup && !tableAction && (
               <div style={{marginBottom:16}}>
@@ -3999,6 +4325,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 onScore={handleWizardScore}
                 players={players}
                 roundWind={roundWind}
+                heldDiscard={heldDiscard}
               />
             )}
           </div>
