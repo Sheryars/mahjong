@@ -1,7 +1,7 @@
 // Netlify Function (v1 classic format) — secure proxy to Claude Vision API
 // The ANTHROPIC_API_KEY is stored in Netlify environment variables, never exposed to browser
 
-exports.handler = async function(event, context) {
+export const handler = async function(event, context) {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
