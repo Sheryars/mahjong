@@ -1464,8 +1464,8 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
           <div style={{fontSize:12,color:"var(--mj-muted)",fontWeight:600,marginBottom:8}}>No win this hand</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {[
-              {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
-              {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
+              {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank · East moves`},
+              {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} each · dealer stays`},
               {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
               {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
             ].map(a=>(
@@ -1836,9 +1836,9 @@ const DXB_REF = [
   { section:"Gong (Kong = 4 of same)", items:[{name:"Open Gong (counts as 1 Concealed Pong)",pts:1},{name:"Concealed Gong (+collect 5 pts each immediately)",pts:1},{name:"Win by Robbing a Gong",pts:10},{name:"Win by Self Drawing a Gong",pts:30},{name:"Four in 2 Ways (same 4 tiles = Sheung+Pong)",pts:5},{name:"Four in 3 Ways (2 Sheungs + pair)",pts:15},{name:"Four in 4 Ways (4 Sheungs)",pts:20}] },
   { section:"Terminals (1s and 9s)", items:[{name:"No Terminal Tiles (with honours OK)",pts:5},{name:"No Terminals AND No Honours",pts:8},{name:"All Terminals WITH Honours",pts:20},{name:"All Terminals — No Honours",pts:40},{name:"1×Terminal Pong Set (111+999 same suit)",pts:5},{name:"2×Terminal Pong Sets (mix)",pts:20},{name:"1×Terminal Sheung (123+789 same suit)",pts:5},{name:"2×Terminal Pure Sheung Sets",pts:20}] },
   { section:"Special Hands", items:[{name:"Nico Nico (7 pairs + 1 pong) — No Closing",pts:40},{name:"Nico Nico + 1 Gong",pts:"+10"},{name:"Nico Nico + 2 Gongs",pts:"+25"},{name:"13 Orphans — No Closing",pts:90},{name:"16 Orphans — No Closing",pts:50},{name:"16 Orphans with 1s & 9s in all suits",pts:"+10"},{name:"Jade Hand (Green Dragon pong + all Bamboo)",pts:20},{name:"Ruby Hand (Red Dragon pong + all Characters)",pts:20},{name:"Diamond Hand (White Dragon pong + all Circles)",pts:20}] },
-  { section:"Penalties", items:[{name:"False Mahjong (game ends, same dealer)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
+  { section:"Penalties", items:[{name:"False Mahjong — 25 to each other player (dealer stays)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
   { section:"Draw / Bank", items:[
-    {name:"Draw / wall out — each player pays 5 into the Bank",pts:-5},
+    {name:"Draw / wall out — each pays 5 into the Bank, East moves",pts:-5},
     {name:"Bank keeps adding on every draw",pts:"…"},
     {name:"Next Self Pick takes the whole Bank, then Bank resets to 0",pts:"Bank"},
     {name:"Discard wins do not take the Bank",pts:"—"},
@@ -2062,13 +2062,13 @@ function formatEndedAt(iso) {
 function tableExceptionMeta(type) {
   if (type === "draw") return {
     title: "Draw / wall out",
-    blurb: `No one won. Each player pays ${DXB_SCORE.draw_bank} into the Bank. The Bank sits until someone Self Picks — that player takes it all and the Bank resets. East keeps the deal.`,
-    confirm: "Confirm draw · pay the Bank",
+    blurb: `No one won. Each player pays ${DXB_SCORE.draw_bank} into the Bank. The Bank sits until someone Self Picks — that player takes it all and the Bank resets. East passes the deal.`,
+    confirm: "Confirm draw · pay the Bank · East moves",
   };
   if (type === "false_mj") return {
     title: "False Mahjong",
-    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.`,
-    confirm: `Confirm −${DXB_SCORE.false_mahjong} · dealer stays`,
+    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts to each of the other three. The hand ends and the dealer stays.`,
+    confirm: `Confirm −${DXB_SCORE.false_mahjong} each · dealer stays`,
   };
   if (type === "chase") return {
     title: "Chasing",
@@ -2092,7 +2092,7 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
       ready: true, type,
       deltas: Object.fromEntries(players.map(p => [p.id, -amt])),
       payments: players.map(p => ({ fromId: p.id, toId: "_bank", amount: amt })),
-      bumpRound: true, keepEast: true,
+      bumpRound: true, keepEast: false,
       extra: { bankAdd: pot, bankBefore: bank, bankAfter: bank + pot },
     };
   }
@@ -2100,17 +2100,11 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
     const who = draft.whoId;
     if (!who) return empty;
     const others = players.filter(p => p.id !== who);
-    const total = DXB_SCORE.false_mahjong;
-    const base = Math.floor(total / Math.max(others.length, 1));
-    let rem = total - base * others.length;
-    const deltas = { [who]: -total };
-    const payments = [];
-    others.forEach(p => {
-      const extra = rem > 0 ? 1 : 0;
-      rem -= extra;
-      const amt = base + extra;
+    const amt = DXB_SCORE.false_mahjong;
+    const deltas = { [who]: -amt * others.length };
+    const payments = others.map(p => {
       deltas[p.id] = amt;
-      payments.push({ fromId: who, toId: p.id, amount: amt });
+      return { fromId: who, toId: p.id, amount: amt };
     });
     return { ready: true, type, deltas, payments, bumpRound: true, keepEast: true, extra: { offenderId: who } };
   }
@@ -2191,6 +2185,13 @@ function ExceptionPaymentPreview({ players, ledger, game }) {
           background:"rgba(245,201,122,0.1)",border:"0.5px solid rgba(245,201,122,0.3)",
           fontSize:12,color:"#7A4E0E"}}>
           🎴 East stays — dealer keeps the deal, 連莊 streak +1
+        </div>
+      )}
+      {!ledger.keepEast && ledger.bumpRound && (
+        <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+          background:"rgba(100,180,100,0.1)",border:"0.5px solid rgba(100,180,100,0.3)",
+          fontSize:12,color:"#2F7D4A"}}>
+          🔄 Dealer passes — East moves to the next seat
         </div>
       )}
       {!ledger.keepEast && !ledger.bumpRound && (
@@ -3206,14 +3207,22 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     const entries = players.map(p => ({ pid: p.id, name: p.name, delta: Number(deltas[p.id] || 0) }));
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
     const nextBank = extra.bankAfter !== undefined ? extra.bankAfter : bank;
-    setPlayers(players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) })));
+    const scored = players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) }));
     setRoundHistory(h => [...h, {
       id: Date.now(), type, round, entries, windsBefore,
       roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
       bankBefore: bank, ...extra,
     }]);
     if (extra.bankAfter !== undefined) setBank(nextBank);
-    if (keepEast) setDealerStreak(s => s + 1);
+    if (bumpRound && !keepEast) {
+      const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(null, scored);
+      setPlayers(rotatedPlayers);
+      setRoundWind(newRoundWind);
+      setDealerStreak(0);
+    } else {
+      setPlayers(scored);
+      if (keepEast) setDealerStreak(s => s + 1);
+    }
     if (bumpRound) setRound(r => r + 1);
     setTableAction(null);
     setActionDraft({});
@@ -3771,8 +3780,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 </button>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
                   {[
-                    {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
-                    {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
+                    {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank · East moves`},
+                    {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} each · dealer stays`},
                     {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
                     {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
                   ].map(a=>(
@@ -4025,7 +4034,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
           <div>
             <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
             <div style={{background:`${game.color}15`,border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:game.accent,lineHeight:1.6}}>
-              📋 From Anetum’s Taiwanese Mahjong Classes sheet (Dubai table). Points add up. Draw pays 5 each into the Bank; the next Self Pick takes the Bank.
+              📋 From Anetum’s Taiwanese Mahjong Classes sheet (Dubai table). Points add up. Draw pays 5 each into the Bank and East moves; the next Self Pick takes the Bank. False Mahjong pays 25 to each other player.
             </div>
             {DXB_REF.map((sec,si)=>(
               <div key={si} style={{marginBottom:16}}>
