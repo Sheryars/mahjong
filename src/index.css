@@ -6,17 +6,17 @@
 }
 
 :root {
-  --mj-bg: #F3EEE6;
+  --mj-bg: #F7F4EE;
   --mj-card: #FFFFFF;
-  --mj-ink: #1C1917;
-  --mj-muted: #6B6560;
-  --mj-line: rgba(28, 25, 23, 0.08);
-  --mj-accent: #B7791F;
-  --mj-accent-soft: #FFF6E5;
-  --mj-good: #2F7D4A;
-  --mj-bad: #C23B3B;
+  --mj-ink: #141210;
+  --mj-muted: #3D3833;
+  --mj-line: rgba(20, 18, 16, 0.16);
+  --mj-accent: #7A4E0E;
+  --mj-accent-soft: #F8E8C4;
+  --mj-good: #1F6B3A;
+  --mj-bad: #B42318;
   --mj-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "DM Sans", system-ui, sans-serif;
-  --mj-shadow: 0 8px 24px rgba(28, 25, 23, 0.06);
+  --mj-shadow: 0 8px 24px rgba(20, 18, 16, 0.08);
 }
 
 html {
