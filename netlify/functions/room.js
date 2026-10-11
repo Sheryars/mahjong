@@ -11,7 +11,7 @@ function json(data, status=200) {
   return { statusCode: status, headers: { ...CORS, "Content-Type":"application/json" }, body: JSON.stringify(data) };
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode:200, headers:CORS, body:"" };
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
