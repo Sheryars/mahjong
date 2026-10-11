@@ -1383,7 +1383,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
       <div style={{display:"flex",gap:8,marginBottom: selectedWinType==="discard"?12:0}}>
         {[
           {id:"self_pick", label:"Self pick", sub:"All 3 pay. East seat +1"},
-          {id:"discard", label:"Discard", sub:"Only discarder pays. East ×2"},
+          {id:"discard", label:"Discard", sub:"Only discarder pays"},
         ].map(wt=>{
           const sel = selectedWinType===wt.id;
           return (
@@ -1411,7 +1411,6 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
                     display:"flex",alignItems:"center",gap:5}}>
                   <span>{WINDS_MAP[p.windId]||"🀀"}</span>
                   <span style={{fontSize:12,fontWeight:600,color:sel?p.color:"var(--mj-muted)"}}>{p.name}</span>
-                  {p.windId==="E"&&<span style={{fontSize:10,color:"#7A4E0E"}}>×2</span>}
                 </button>
               );
             })}
@@ -3202,10 +3201,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
   // Dubai rules:
   // - Self-pick: all 3 losers pay the full score. East SEAT pays score + 1 extra.
-  //   (East here = the player sitting in East seat, NOT whether they won or discarded)
-  // - Discard win: only discarder pays. If East SEAT discarded → pays double.
-  // NOTE: "East pays +1 / East pays ×2" refers to the East SEAT player specifically.
-  //       It does NOT mean the winner gets double — only the East seat payer is affected.
+  // - Discard win: only the discarder pays the score. No East double.
 
   const calcPayments = (score, winnerId, winType, discarderId) => {
     const winner = players.find(p => p.id === winnerId);
@@ -3219,12 +3215,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
         payments.push({ fromId: loser.id, toId: winnerId, amount: amt });
       });
     } else {
-      // Discard win — ONLY the discarder pays.
-      // If discarder is in East seat → pays double.
       const discarder = players.find(p => p.id === discarderId);
       if (!discarder) return [];
-      const amt = discarder.windId === "E" ? score * 2 : score;
-      payments.push({ fromId: discarderId, toId: winnerId, amount: amt });
+      payments.push({ fromId: discarderId, toId: winnerId, amount: score });
     }
 
     return payments;
@@ -3612,7 +3605,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     <div style={{display:"flex",gap:8}}>
                       {[
                         {id:"self_pick", label:"Self Pick",    emoji:"🤲", sub:"All 3 pay full score. East pays +1 extra."},
-                        {id:"discard",   label:"Discard Win",  emoji:"♟️", sub:"Only discarder pays. East discarder pays ×2."},
+                        {id:"discard",   label:"Discard Win",  emoji:"♟️", sub:"Only discarder pays."},
                       ].map(wt=>(
                         <button key={wt.id}
                           onClick={()=>setPendingScore(s=>({...s,_winType:wt.id,_discarderId:null}))}
@@ -3634,12 +3627,11 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   <div style={{marginBottom:12}}>
                     <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>Who discarded the winning tile?</div>
                     <div style={{fontSize:11,color:"var(--mj-muted)",marginBottom:8,lineHeight:1.5}}>
-                      Only this player pays. If they are East (Dealer) they pay double.
+                      Only this player pays the hand points.
                     </div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {players.filter(p=>p.id!==pendingScore._winnerId).map(p=>{
                         const WEMOJI = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
-                        const isEast = p.windId==="E";
                         const isSelected = pendingScore._discarderId===p.id;
                         return (
                           <button key={p.id}
@@ -3650,7 +3642,6 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                               cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
                             <span style={{fontSize:13}}>{WEMOJI[p.windId]||"🀀"}</span>
                             <span style={{fontSize:12,fontWeight:600,color:isSelected?p.color:"var(--mj-muted)"}}>{p.name}</span>
-                            {isEast&&<span style={{fontSize:10,color:"#7A4E0E",background:"rgba(245,201,122,0.15)",padding:"1px 5px",borderRadius:6,fontWeight:700}}>Dealer ×2</span>}
                           </button>
                         );
                       })}
@@ -3700,8 +3691,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   // Explain why this amount
                   const baseScore = pendingPayment.score;
                   let reason = "";
-                  if(pay.amount === baseScore * 2)      reason = "East discard ×2";
-                  else if(pay.amount === baseScore + 1) reason = "East seat +1";
+                  if(pay.amount === baseScore + 1) reason = "East seat +1";
                   return (
                     <div key={i} style={{display:"flex",alignItems:"center",gap:10,
                       padding:"9px 0",borderBottom:"0.5px solid var(--mj-line)"}}>
