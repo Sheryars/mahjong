@@ -535,9 +535,9 @@ const DXB_QUESTIONS = [
     opts:[
       { id:"mixed",        label:"Mixed suits",        sub:"All 3 suits + honours",              emoji:"🌈",
         tiles:[{suit:"man",n:3},{suit:"pin",n:5},{suit:"bam",n:7}] },
-      { id:"two_suit",     label:"Two suits + honours",sub:"+8 pts",                             emoji:"🔵",
+      { id:"two_suit",     label:"Two suits, no honours",sub:"Suit tiles only · flowers OK · +8", emoji:"🔵",
         tiles:[{suit:"man",n:4},{suit:"man",n:5},{suit:"man",n:6},{suit:"pin",n:2},{suit:"pin",n:3},{suit:"pin",n:4}] },
-      { id:"two_suit_clean",label:"Two suits only",    sub:"No honours or flowers · +15 pts",    emoji:"⚪",
+      { id:"two_suit_clean",label:"Two suits, no honours, no flowers", sub:"+15 pts",            emoji:"⚪",
         tiles:[{suit:"man",n:7},{suit:"man",n:8},{suit:"man",n:9},{suit:"bam",n:1},{suit:"bam",n:2},{suit:"bam",n:3}] },
       { id:"semi_pure",    label:"Semi Pure",          sub:"One suit + honours · +30 pts",       emoji:"🟡",
         tiles:[{suit:"bam",n:4},{suit:"bam",n:5},{suit:"bam",n:6},{suit:"wind",n:"E"},{suit:"dragon",n:"G"}] },
@@ -744,7 +744,7 @@ function calcDxbScore(raw) {
   if(ans.suit_type==="pure") add(DXB_SCORE.pure_suit,"Pure Suit (one suit only)");
   else if(ans.suit_type==="semi_pure") add(DXB_SCORE.semi_pure,"Semi Pure (one suit + honours)");
   else if(ans.suit_type==="two_suit_clean") add(DXB_SCORE.two_suit_no_honour_no_flower,"Two Suits, No Honours/Flowers");
-  else if(ans.suit_type==="two_suit") add(DXB_SCORE.two_suit,"Two Suits");
+  else if(ans.suit_type==="two_suit") add(DXB_SCORE.two_suit,"Two Suits (no honours)");
   else if(ans.suit_type==="all_five") add(DXB_SCORE.all_five_suits,"All 5 Suits");
 
   // Sheung type
@@ -1673,7 +1673,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {aiResult.flower_count>0&&<Chip label={`🌸 ${aiResult.flower_count} flower${aiResult.flower_count>1?"s":""}`} color={game.color}/>}
                 {aiResult.flower_count===0&&<Chip label="No flowers" color="#5A8A6A"/>}
-                {aiResult.suit_type&&<Chip label={{"pure":"Pure Suit","semi_pure":"Semi Pure","two_suit":"2 Suits","two_suit_clean":"2 Suits Clean","all_five":"All 5 Suits","mixed":"Mixed"}[aiResult.suit_type]||aiResult.suit_type} color={game.color}/>}
+                {aiResult.suit_type&&<Chip label={{"pure":"Pure Suit","semi_pure":"Semi Pure","two_suit":"2 Suits, no honours","two_suit_clean":"2 Suits, no flowers/honours","all_five":"All 5 Suits","mixed":"Mixed"}[aiResult.suit_type]||aiResult.suit_type} color={game.color}/>}
                 {aiResult.hand_type&&<Chip label={{"all_sheung":"All Sheung","all_pong":"All Pong","special":"Special Hand","mixed":"Mixed"}[aiResult.hand_type]||aiResult.hand_type} color={game.color}/>}
                 {aiResult.pong_dragon>0&&<Chip label={`${aiResult.pong_dragon} Dragon Pong`} color="#C8923A"/>}
                 {aiResult.pong_wind>0&&<Chip label={`${aiResult.pong_wind} Wind Pong`} color="#5B4A9E"/>}
@@ -1804,7 +1804,7 @@ const DXB_REF = [
   { section:"Winning Tile", items:[{name:"East / Dealer wins (or East discards)",pts:1},{name:"Self Pick from Wall",pts:5},{name:"Self Pick from Flower Wall",pts:10},{name:"Concealed Hand — Discard win",pts:10},{name:"Concealed Hand — Self Pick",pts:15},{name:"Fully Exposed — Discard win",pts:10},{name:"Fully Exposed — Self Pick",pts:15},{name:"Win within 7 tiles in the sea",pts:50},{name:"Seabed — last tile from wall",pts:20},{name:"Earthly — first discard by East",pts:90},{name:"Heavenly — dealer on deal",pts:100}] },
   { section:"Flowers", items:[{name:"Each Flower tile",pts:1},{name:"Flower of player's seat (+1 bonus each)",pts:"+1"},{name:"Mixed Bouquet (red+blue 1-4)",pts:5},{name:"Pure Bouquet (full set same colour)",pts:10},{name:"7 Flowers — Instant Win",pts:20},{name:"8 Flowers — Instant Win",pts:40},{name:"No Flowers",pts:1},{name:"No Honour tiles",pts:1},{name:"No Flowers AND No Honours",pts:5},{name:"No Flowers/Honours in All Sheung",pts:15}] },
   { section:"Pair / Eyes", items:[{name:"Good Eyes — pair of 2s, 5s, or 8s (any suit)",pts:2},{name:"True Single Wait",pts:2},{name:"Calling by Pairs",pts:2}] },
-  { section:"Suit Hands", items:[{name:"Two Suit Hand (with flowers allowed)",pts:8},{name:"Two Suit — No Honours, No Flowers",pts:15},{name:"Semi Pure — One Suit + Honours",pts:30},{name:"Pure Suit — One Suit Only",pts:90},{name:"All 5 Suits (3 suits + winds + dragons)",pts:10}] },
+  { section:"Suit Hands", items:[{name:"2 Suits — no winds or dragons (flowers OK)",pts:8},{name:"2 Suits — no flowers, no honours",pts:15},{name:"Semi Pure — One Suit + Honours",pts:30},{name:"Pure Suit — One Suit Only",pts:90},{name:"All 5 Suits (3 suits + winds + dragons)",pts:10}] },
   { section:"Sheung (Sequence) Hands", items:[{name:"All Sheung Hand",pts:5},{name:"All Sheung — No Honours, No Flowers",pts:15},{name:"Step Up (3 sequential sheungs, any suit)",pts:5},{name:"All Step Up (5 sheungs)",pts:20},{name:"All Step Up — Same Suit",pts:90}] },
   { section:"Dragon Run (1-9 complete run)", items:[{name:"Mixed Dragon — Exposed/Partial",pts:8},{name:"Mixed Dragon — Concealed",pts:10},{name:"Pure Dragon — Exposed/Partial",pts:15},{name:"Pure Dragon — Concealed",pts:20}] },
   { section:"Brothers (Same Suit Sheungs)", items:[{name:"2 Sets Brother Sheungs",pts:5},{name:"3 Sets Brother Sheungs",pts:15},{name:"4 Sets Brother Sheungs",pts:30}] },
