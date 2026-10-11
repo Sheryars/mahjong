@@ -359,6 +359,8 @@ const DXB_SCORE = {
   // PENALTIES
   false_mahjong: 25,
   chasing_wind_dragon: 5, chasing_suit: 10,
+  // Dead wall / draw — Anetum sheet + Dubai house rule
+  draw_bank: 5,
 };
 
 // ─── DUBAI SCORING WIZARD QUESTIONS ──────────────────────────────────────────
@@ -1349,8 +1351,8 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
   const WINDS_MAP = {E:"🀀",S:"🀁",W:"🀂",N:"🀃"};
 
   const winnerBlock = players.length > 0 && (
-    <div style={{background:"#1A1712",borderRadius:16,border:"0.5px solid rgba(255,255,255,0.08)",padding:16,marginBottom:12}}>
-      <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:10}}>Who won?</div>
+    <div className="mj-card" style={{padding:16,marginBottom:12}}>
+      <div style={{fontSize:12,color:"var(--mj-muted)",letterSpacing:0.2,fontWeight:600,marginBottom:10}}>Who won?</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
         {players.map(p=>{
           const isSel = selectedWinner===p.id;
@@ -1360,7 +1362,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
                 background:isSel?`${p.color}25`:"transparent",cursor:"pointer",textAlign:"left"}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
                 <span style={{fontSize:16}}>{WINDS_MAP[p.windId]||"🀀"}</span>
-                <span style={{fontSize:14,fontWeight:700,color:isSel?p.color:"#F0E8DC"}}>{p.name}</span>
+                <span style={{fontSize:15,fontWeight:700,color:isSel?p.color:"var(--mj-ink)"}}>{p.name}</span>
               </div>
               <div style={{fontSize:10,color:"rgba(200,180,160,0.45)"}}>
                 {p.windId==="E"?"East · Dealer":p.windId==="S"?"South":p.windId==="W"?"West":"North"}
@@ -1416,8 +1418,8 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
     <div>
       {winnerBlock}
 
-      <div style={{background:"#1A1712",borderRadius:16,border:`1.5px solid ${game.color}50`,padding:20,marginBottom:12}}>
-        <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC",marginBottom:4}}>Photo of the hand</div>
+      <div className="mj-card" style={{padding:20,marginBottom:12}}>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:4}}>Photo of the hand</div>
         <div style={{fontSize:12,color:game.accent,fontWeight:600,marginBottom:8}}>Optional · Claude fills the checklist</div>
         <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.6,marginBottom:16}}>
           Photograph the winning tiles. You can still change every answer before the total is calculated.
@@ -1431,8 +1433,8 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
         </button>
       </div>
 
-      <div style={{background:"#1A1712",borderRadius:16,border:"0.5px solid rgba(255,255,255,0.08)",padding:20}}>
-        <div style={{fontSize:15,fontWeight:700,color:"#F0E8DC",marginBottom:6}}>Answer the questions</div>
+      <div className="mj-card" style={{padding:20}}>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:6}}>Answer the questions</div>
         <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.6,marginBottom:12}}>Skip the photo and score the hand yourself.</div>
         <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setAiResult(null); setMode("wizard"); }}
           style={{width:"100%",padding:12,background:"transparent",border:`1px solid ${game.color}55`,borderRadius:12,color:game.accent,fontSize:14,fontWeight:700,cursor:"pointer"}}>
@@ -1442,19 +1444,19 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
 
       {onTableAction && (
         <div style={{marginTop:12}}>
-          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>No win this hand</div>
+          <div style={{fontSize:12,color:"var(--mj-muted)",fontWeight:600,marginBottom:8}}>No win this hand</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             {[
-              {id:"draw", label:"Draw / wall out", sub:"No one wins · East stays"},
+              {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
               {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
               {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
               {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
             ].map(a=>(
               <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
-                style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
-                  borderRadius:12,cursor:"pointer",textAlign:"left"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>{a.label}</div>
-                <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2}}>{a.sub}</div>
+                style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
+                  borderRadius:14,cursor:"pointer",textAlign:"left",boxShadow:"var(--mj-shadow)"}}>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--mj-ink)"}}>{a.label}</div>
+                <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:3}}>{a.sub}</div>
               </button>
             ))}
           </div>
@@ -1772,6 +1774,12 @@ const DXB_REF = [
   { section:"Terminals (1s and 9s)", items:[{name:"No Terminal Tiles (with honours OK)",pts:5},{name:"No Terminals AND No Honours",pts:8},{name:"All Terminals WITH Honours",pts:20},{name:"All Terminals — No Honours",pts:40},{name:"1×Terminal Pong Set (111+999 same suit)",pts:5},{name:"2×Terminal Pong Sets (mix)",pts:20},{name:"1×Terminal Sheung (123+789 same suit)",pts:5},{name:"2×Terminal Pure Sheung Sets",pts:20}] },
   { section:"Special Hands", items:[{name:"Nico Nico (7 pairs + 1 pong) — No Closing",pts:40},{name:"Nico Nico + 1 Gong",pts:"+10"},{name:"Nico Nico + 2 Gongs",pts:"+25"},{name:"13 Orphans — No Closing",pts:90},{name:"16 Orphans — No Closing",pts:50},{name:"16 Orphans with 1s & 9s in all suits",pts:"+10"},{name:"Jade Hand (Green Dragon pong + all Bamboo)",pts:20},{name:"Ruby Hand (Red Dragon pong + all Characters)",pts:20},{name:"Diamond Hand (White Dragon pong + all Circles)",pts:20}] },
   { section:"Penalties", items:[{name:"False Mahjong (game ends, same dealer)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
+  { section:"Draw / Bank", items:[
+    {name:"Draw / wall out — each player pays 5 into the Bank",pts:-5},
+    {name:"Bank keeps adding on every draw",pts:"…"},
+    {name:"Next Self Pick takes the whole Bank, then Bank resets to 0",pts:"Bank"},
+    {name:"Discard wins do not take the Bank",pts:"—"},
+  ] },
 ];
 
 // ─── HANDS DATA ───────────────────────────────────────────────────────────────
@@ -1920,7 +1928,7 @@ function loadAed() {
 function saveAed(v) {
   try { localStorage.setItem(AED_KEY, String(v ?? "")); } catch {}
 }
-function archiveNight({ players, round, roundHistory, roundWind, dealerStreak }) {
+function archiveNight({ players, round, roundHistory, roundWind, dealerStreak, bank }) {
   const snapshot = {
     id: Date.now(),
     endedAt: new Date().toISOString(),
@@ -1929,6 +1937,7 @@ function archiveNight({ players, round, roundHistory, roundWind, dealerStreak })
     lastRound: round,
     roundWind,
     dealerStreak: dealerStreak || 0,
+    bank: bank || 0,
     history: (roundHistory || []).map(h => ({
       id: h.id, type: h.type, round: h.round, label: h.label,
       winnerId: h.winnerId, entries: h.entries,
@@ -1968,7 +1977,8 @@ function minimizeTransfers(players) {
 
 function historyLabel(r) {
   if (!r) return "Hand";
-  if (r.type === "draw") return "Draw · no win";
+  if (r.type === "draw") return r.bankAdd ? `Draw · bank +${r.bankAdd}` : "Draw · no win";
+  if (r.bankTaken) return `Win · bank +${r.bankTaken}`;
   if (r.type === "false_mj") return "False Mahjong";
   if (r.type === "chase") return r.chaseKind === "suit" ? "Chasing suit" : "Chasing wind/dragon";
   if (r.type === "gong") return "Concealed Gong";
@@ -1989,8 +1999,8 @@ function formatEndedAt(iso) {
 function tableExceptionMeta(type) {
   if (type === "draw") return {
     title: "Draw / wall out",
-    blurb: "No one won. Scores stay put. East keeps the deal and the 連莊 streak goes up. No extra points until the booklet says so.",
-    confirm: "Confirm draw · East stays",
+    blurb: `No one won. Each player pays ${DXB_SCORE.draw_bank} into the Bank. The Bank sits until someone Self Picks — that player takes it all and the Bank resets. East keeps the deal.`,
+    confirm: "Confirm draw · pay the Bank",
   };
   if (type === "false_mj") return {
     title: "False Mahjong",
@@ -2010,14 +2020,17 @@ function tableExceptionMeta(type) {
   return { title: "Table action", blurb: "", confirm: "Confirm" };
 }
 
-function buildExceptionLedger(type, draft, players) {
+function buildExceptionLedger(type, draft, players, bank = 0) {
   const empty = { ready: false, type, deltas: {}, payments: [], bumpRound: false, keepEast: false, extra: {} };
   if (type === "draw") {
+    const amt = DXB_SCORE.draw_bank;
+    const pot = amt * players.length;
     return {
       ready: true, type,
-      deltas: Object.fromEntries(players.map(p => [p.id, 0])),
-      payments: [],
-      bumpRound: true, keepEast: true, extra: {},
+      deltas: Object.fromEntries(players.map(p => [p.id, -amt])),
+      payments: players.map(p => ({ fromId: p.id, toId: "_bank", amount: amt })),
+      bumpRound: true, keepEast: true,
+      extra: { bankAdd: pot, bankBefore: bank, bankAfter: bank + pot },
     };
   }
   if (type === "false_mj") {
@@ -2078,19 +2091,26 @@ function ExceptionPaymentPreview({ players, ledger, game }) {
       ) : ledger.payments.map((pay,i) => {
         const from = players.find(p => p.id === pay.fromId);
         const to = players.find(p => p.id === pay.toId);
-        if (!from || !to) return null;
+        const toBank = pay.toId === "_bank";
+        if (!from || (!to && !toBank)) return null;
         return (
           <div key={i} style={{display:"flex",alignItems:"center",gap:10,
             padding:"9px 0",borderBottom:"0.5px solid rgba(255,255,255,0.06)"}}>
             <div style={{flex:1}}>
-              <span style={{fontSize:13,color:"#E05050",fontWeight:600}}>{WEMOJI[from.windId]} {from.name}</span>
+              <span style={{fontSize:13,color:"#C23B3B",fontWeight:600}}>{WEMOJI[from.windId]} {from.name}</span>
               <span style={{fontSize:13,color:"rgba(200,180,160,0.4)"}}> → </span>
-              <span style={{fontSize:13,color:"#8FBC8F",fontWeight:600}}>{WEMOJI[to.windId]} {to.name}</span>
+              <span style={{fontSize:13,color:"#2F7D4A",fontWeight:600}}>{toBank ? "Bank" : `${WEMOJI[to.windId]} ${to.name}`}</span>
             </div>
             <div style={{fontSize:18,fontWeight:900,color:game.accent,flexShrink:0}}>{pay.amount} pts</div>
           </div>
         );
       })}
+      {ledger.extra?.bankAdd > 0 && (
+        <div style={{margin:"10px 0 4px",padding:"10px 12px",borderRadius:12,background:"#FFF6E5",
+          border:"1px solid rgba(183,121,31,0.25)",fontSize:13,color:"#8A5A12",fontWeight:600}}>
+          Bank {ledger.extra.bankBefore || 0} → {ledger.extra.bankAfter} · next Self Pick takes it
+        </div>
+      )}
       <div style={{marginTop:8}}>
         {players.map(p => {
           const d = Number(ledger.deltas[p.id] || 0);
@@ -2121,11 +2141,11 @@ function ExceptionPaymentPreview({ players, ledger, game }) {
   );
 }
 
-function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, onCancel }) {
+function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, onCancel, bank = 0 }) {
   const meta = tableExceptionMeta(type);
-  const ledger = buildExceptionLedger(type, draft, players);
+  const ledger = buildExceptionLedger(type, draft, players, bank);
   return (
-    <div style={{background:"#1A1712",borderRadius:14,border:"1.5px solid rgba(200,146,58,0.4)",padding:16}}>
+    <div className="mj-card" style={{padding:18}}>
       <div style={{fontSize:15,fontWeight:800,color:"#F0E8DC",marginBottom:6}}>{meta.title}</div>
       <div style={{fontSize:13,color:"rgba(200,180,160,0.55)",lineHeight:1.5,marginBottom:12}}>{meta.blurb}</div>
 
@@ -2347,12 +2367,12 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"#0E0C0A",display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",padding:"32px 20px",fontFamily:"'DM Sans','Segoe UI',sans-serif"}}>
+    <div className="mj-page" style={{minHeight:"100vh",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",padding:"32px 20px"}}>
       {/* Logo */}
       <div style={{marginBottom:32,textAlign:"center"}}>
         <div style={{fontSize:64,marginBottom:8}}>🀄</div>
-        <div style={{fontSize:26,fontWeight:900,color:"#F0E8DC",letterSpacing:"-0.5px"}}>MahjongCompanion</div>
+        <div style={{fontSize:28,fontWeight:800,color:"var(--mj-ink)",letterSpacing:"-0.7px"}}>Mahjong</div>
         <div style={{fontSize:13,color:"#C8923A",marginTop:4,fontWeight:600,letterSpacing:0.4}}>Dubai Style</div>
       </div>
 
@@ -2546,6 +2566,7 @@ function GuestView({ room, onLeave }) {
   const dealer = players.find(p => p.windId === "E");
   const rw = WINDS.find(w => w.id === roundWind);
   const dealerStreak = gameState.dealerStreak || 0;
+  const bank = gameState.bank || 0;
 
   // Hands + cats for Dubai
   const allHands = GAME_HANDS[game.id] || [];
@@ -2559,8 +2580,7 @@ function GuestView({ room, onLeave }) {
   ];
 
   return (
-    <div style={{minHeight:"100vh",background:"#0E0C0A",fontFamily:"'DM Sans','Segoe UI',sans-serif",
-      color:"#E8E0D5",maxWidth:480,margin:"0 auto"}}>
+    <div className="mj-page" style={{minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
 
       {/* Header */}
       <div style={{padding:"14px 18px 10px",background:"#1A1410",
@@ -2593,7 +2613,7 @@ function GuestView({ room, onLeave }) {
           </div>}
           {dealer&&<div style={{fontSize:11,color:"#F5C97A",background:"rgba(245,201,122,0.12)",
             borderRadius:10,padding:"1px 8px",fontWeight:600,marginLeft:"auto"}}>
-            🎴 {dealer.name} deals{dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}
+            🎴 {dealer.name} deals{dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}{bank>0 ? ` · Bank ${bank}` : ""}
           </div>}
         </div>
         <style>{`@keyframes gpulse{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
@@ -2870,9 +2890,8 @@ function CreatingRoomScreen({ onCreated, onCancel }) {
   }, []);
 
   return (
-    <div style={{minHeight:"100vh",background:"#0E0C0A",display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",padding:32,
-      fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#E8E0D5"}}>
+    <div className="mj-page" style={{minHeight:"100vh",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",padding:32}}>
       <div style={{fontSize:48,marginBottom:16}}>🔗</div>
       {error ? (
         <>
@@ -2906,6 +2925,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const [roundWind, setRoundWind] = useState(saved?.roundWind || "E");
   const [roundHistory, setRoundHistory] = useState(saved?.roundHistory || []);
   const [dealerStreak, setDealerStreak] = useState(saved?.dealerStreak || 0);
+  const [bank, setBank] = useState(saved?.bank || 0);
   const [scoreInputs, setScoreInputs] = useState({});
   const [handFilter, setHandFilter] = useState("all");
   const [expandedHand, setExpandedHand] = useState(null);
@@ -2929,17 +2949,17 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
   // Persist locally
   useEffect(() => {
-    saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory, dealerStreak });
-  }, [activeGame.id, players, round, roundWind, roundHistory, dealerStreak]);
+    saveState({ gameId:activeGame.id, players, round, roundWind, roundHistory, dealerStreak, bank });
+  }, [activeGame.id, players, round, roundWind, roundHistory, dealerStreak, bank]);
 
   useEffect(() => { saveAed(aedPerPoint); }, [aedPerPoint]);
 
   // Sync to room if host
   useEffect(() => {
     if (!isHost || !room) return;
-    const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id, dealerStreak };
+    const gameState = { players, round, roundWind, roundHistory, gameId:activeGame.id, dealerStreak, bank };
     apiUpdateRoom(room.code, gameState).catch(()=>{});
-  }, [players, round, roundWind, roundHistory, dealerStreak, isHost, room]);
+  }, [players, round, roundWind, roundHistory, dealerStreak, bank, isHost, room]);
 
   const game = activeGame;
   const isDXB = game.id === "dubai";
@@ -2972,6 +2992,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setRoundHistory([]);
     setRound(1);
     setDealerStreak(0);
+    setBank(0);
     setScoreInputs({});
   };
 
@@ -2982,6 +3003,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setRound(1);
     setRoundWind("E");
     setDealerStreak(0);
+    setBank(0);
     setScoreInputs({});
     setShowSetup(true);
     setRegulars(loadRegulars());
@@ -3078,12 +3100,16 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     return { rotatedPlayers: rotated, newRoundWind };
   };
 
-  const applyPayments = (payments, winnerId) => {
+  const applyPayments = (payments, winnerId, winType) => {
     const deltas = {};
     payments.forEach(({ fromId, toId, amount }) => {
       deltas[fromId] = (deltas[fromId] || 0) - amount;
       deltas[toId]   = (deltas[toId]   || 0) + amount;
     });
+
+    const takeBank = winType === "self_pick" && bank > 0;
+    const bankTaken = takeBank ? bank : 0;
+    if (takeBank) deltas[winnerId] = (deltas[winnerId] || 0) + bankTaken;
 
     const updatedPlayers = players.map(p => ({
       ...p, score: p.score + (deltas[p.id] || 0)
@@ -3099,10 +3125,15 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
     const winner = players.find(p => p.id === winnerId);
     const nextStreak = winner?.windId === "E" ? dealerStreak + 1 : 0;
-    setRoundHistory(h => [...h, { id: Date.now(), type: "win", round, entries, payments, winnerId, windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak }]);
+    setRoundHistory(h => [...h, {
+      id: Date.now(), type: "win", round, entries, payments, winnerId,
+      windsBefore, roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
+      bankBefore: bank, bankAfter: takeBank ? 0 : bank, bankTaken,
+    }]);
     setPlayers(rotatedPlayers);
     setRoundWind(newRoundWind);
     setDealerStreak(nextStreak);
+    if (takeBank) setBank(0);
     setRound(r => r + 1);
     setPendingPayment(null);
     setPendingScore(null);
@@ -3111,11 +3142,14 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const pushLedger = ({ type, deltas, bumpRound, keepEast, extra = {} }) => {
     const entries = players.map(p => ({ pid: p.id, name: p.name, delta: Number(deltas[p.id] || 0) }));
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
+    const nextBank = extra.bankAfter !== undefined ? extra.bankAfter : bank;
     setPlayers(players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) })));
     setRoundHistory(h => [...h, {
       id: Date.now(), type, round, entries, windsBefore,
-      roundWindBefore: roundWind, dealerStreakBefore: dealerStreak, ...extra,
+      roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
+      bankBefore: bank, ...extra,
     }]);
+    if (extra.bankAfter !== undefined) setBank(nextBank);
     if (keepEast) setDealerStreak(s => s + 1);
     if (bumpRound) setRound(r => r + 1);
     setTableAction(null);
@@ -3139,7 +3173,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       ? "Save this night to Past nights and go home?"
       : "Save this night and start a new scorecard with the same names?";
     if (!window.confirm(msg)) return;
-    archiveNight({ players, round, roundHistory, roundWind, dealerStreak });
+    archiveNight({ players, round, roundHistory, roundWind, dealerStreak, bank });
     rememberPlayers(players);
     setRegulars(loadRegulars());
     const kept = players.map((p, i) => ({
@@ -3152,13 +3186,14 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setRound(1);
     setRoundWind("E");
     setDealerStreak(0);
+    setBank(0);
     setScoreInputs({});
     setPendingPayment(null);
     setPendingScore(null);
     setTableAction(null);
     setActionDraft({});
     setShowSetup(true);
-    saveState({ gameId: activeGame.id, players: kept, round: 1, roundWind: "E", roundHistory: [], dealerStreak: 0 });
+    saveState({ gameId: activeGame.id, players: kept, round: 1, roundWind: "E", roundHistory: [], dealerStreak: 0, bank: 0 });
     if (goHome) {
       localStorage.removeItem(STORAGE_KEY);
       if (onLeaveRoom) onLeaveRoom();
@@ -3176,6 +3211,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     }));
     if (last.roundWindBefore) setRoundWind(last.roundWindBefore);
     if (last.dealerStreakBefore !== undefined) setDealerStreak(last.dealerStreakBefore);
+    if (last.bankBefore !== undefined) setBank(last.bankBefore);
     const midHand = last.type === "gong" || last.type === "chase";
     if (!midHand) setRound(last.round || Math.max(1, round - 1));
     setRoundHistory(h => h.slice(0, -1));
@@ -3199,14 +3235,14 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"#0E0C0A",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#E8E0D5",maxWidth:480,margin:"0 auto"}}>
+    <div className="mj-page" style={{minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
 
       {/* Header */}
-      <div style={{padding:"16px 20px 12px",background:"linear-gradient(180deg,#1A1410 0%,#0E0C0A 100%)",borderBottom:"0.5px solid rgba(200,146,58,0.2)",position:"sticky",top:0,zIndex:50}}>
+      <div style={{padding:"16px 20px 12px",background:"rgba(243,238,230,0.92)",backdropFilter:"saturate(180%) blur(16px)",borderBottom:"0.5px solid var(--mj-line)",position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
-            <div style={{fontSize:11,color:game.color,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>MahjongCompanion</div>
-            <div style={{fontSize:18,fontWeight:700,color:"#F0E8DC",marginTop:2}}>Round {round}</div>
+            <div style={{fontSize:12,color:"var(--mj-muted)",letterSpacing:0.2,fontWeight:600}}>Mahjong</div>
+            <div style={{fontSize:28,fontWeight:800,color:"var(--mj-ink)",marginTop:2,letterSpacing:"-0.6px"}}>Round {round}</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {isHost && room && (
@@ -3243,9 +3279,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       </div>
 
       {/* Tab Bar */}
-      <div style={{display:"flex",background:"#121008",borderBottom:"0.5px solid rgba(255,255,255,0.07)",position:"sticky",top:73,zIndex:40}}>
+      <div style={{display:"flex",background:"rgba(243,238,230,0.92)",borderBottom:"0.5px solid var(--mj-line)",position:"sticky",top:73,zIndex:40}}>
         {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px 9px",background:"none",border:"none",borderBottom:tab===t.id?`2px solid ${game.color}`:"2px solid transparent",color:tab===t.id?game.accent:"rgba(200,180,160,0.4)",fontSize:10,fontWeight:600,letterSpacing:0.5,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"all 0.15s"}}>
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"11px 4px 10px",background:"none",border:"none",borderBottom:tab===t.id?`2.5px solid ${game.color}`:"2.5px solid transparent",color:tab===t.id?"var(--mj-ink)":"var(--mj-muted)",fontSize:11,fontWeight:700,letterSpacing:0.2,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"all 0.15s"}}>
             <span style={{fontSize:16}}>{t.icon}</span>{t.label.toUpperCase()}
           </button>
         ))}
@@ -3452,7 +3488,11 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                         pendingScore._winType,
                         pendingScore._discarderId
                       );
-                      setPendingPayment({ score: pts, payments, winnerId: pendingScore._winnerId });
+                      setPendingPayment({
+                        score: pts, payments,
+                        winnerId: pendingScore._winnerId,
+                        winType: pendingScore._winType,
+                      });
                     }}
                     style={{width:"100%",padding:12,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                     Calculate payments →
@@ -3519,6 +3559,18 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     });
                   })()}
                 </div>
+                {pendingPayment.winType === "self_pick" && bank > 0 && (
+                  <div style={{marginTop:8,padding:"10px 12px",borderRadius:12,background:"#FFF6E5",
+                    border:"1px solid rgba(183,121,31,0.3)",fontSize:13,color:"#8A5A12",fontWeight:700}}>
+                    Self pick takes the Bank · +{bank} pts · Bank resets to 0
+                  </div>
+                )}
+                {pendingPayment.winType === "discard" && bank > 0 && (
+                  <div style={{marginTop:8,padding:"10px 12px",borderRadius:12,background:"#F4F1EA",
+                    border:"1px solid rgba(28,25,23,0.08)",fontSize:13,color:"#6B6560"}}>
+                    Discard win — Bank stays at {bank}
+                  </div>
+                )}
                 {/* Dealer rotation notice */}
                 {(() => {
                   const winner = players.find(p=>p.id===pendingPayment.winnerId);
@@ -3537,7 +3589,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 <div style={{display:"flex",gap:10,marginTop:12}}>
                   <button onClick={()=>{setPendingPayment(null);setPendingScore(null);}}
                     style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(200,180,160,0.4)",fontSize:12,cursor:"pointer"}}>Cancel</button>
-                  <button onClick={()=>applyPayments(pendingPayment.payments, pendingPayment.winnerId)}
+                  <button onClick={()=>applyPayments(pendingPayment.payments, pendingPayment.winnerId, pendingPayment.winType)}
                     style={{flex:2,padding:11,background:game.color,border:"none",borderRadius:10,color:"#0E0C0A",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                     Confirm & update scores ✓
                   </button>
@@ -3565,6 +3617,12 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                           border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"2px 8px",fontWeight:600}}>
                           {rw?.emoji} {rw?.label} Round
                         </div>
+                        <div style={{fontSize:11,color:bank>0?"#8A5A12":"rgba(200,180,160,0.55)",
+                          background:bank>0?"#FFF6E5":"rgba(255,255,255,0.04)",
+                          border:`0.5px solid ${bank>0?"rgba(183,121,31,0.35)":"rgba(255,255,255,0.08)"}`,
+                          borderRadius:10,padding:"2px 8px",fontWeight:700}}>
+                          Bank {bank}{bank>0 ? " · next self pick" : ""}
+                        </div>
                       </>;
                     })()}
                   </div>
@@ -3581,9 +3639,10 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 const isRoundWind = p.windId===roundWind;
                 return (
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,
-                    background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#1A1712",
-                    border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid rgba(255,255,255,0.07)",
-                    borderRadius:12,padding:"11px 14px",marginBottom:8}}>
+                    background:isDealer?`${p.color}18`:"#FFFFFF",
+                    border:isDealer?`1.5px solid ${p.color}55`:"0.5px solid var(--mj-line)",
+                    borderRadius:18,padding:"14px 16px",marginBottom:10,
+                    boxShadow:"var(--mj-shadow)"}}>
                     <div style={{width:30,height:30,borderRadius:"50%",background:p.color,
                       display:"flex",alignItems:"center",justifyContent:"center",
                       fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
@@ -3600,8 +3659,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                               color:"#F0E8DC",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit"}}/>
                         ) : (
                           <span onClick={()=>setEditingPlayer(p.id)}
-                            style={{fontSize:14,fontWeight:700,color:"#F0E8DC",
-                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:100,cursor:"pointer"}}>
+                            style={{fontSize:16,fontWeight:700,color:"var(--mj-ink)",
+                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120,cursor:"pointer"}}>
                             {p.name}
                           </span>
                         )}
@@ -3618,8 +3677,8 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                           fontWeight:600,flexShrink:0}}>+1 wind</span>}
                       </div>
                     </div>
-                    <div style={{fontSize:22,fontWeight:700,
-                      color:p.score>0?game.accent:p.score<0?"#E05050":"rgba(200,180,160,0.4)",
+                    <div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.8px",
+                      color:p.score>0?"#2F7D4A":p.score<0?"#C23B3B":"var(--mj-muted)",
                       flexShrink:0}}>
                       {p.score>0?"+":""}{p.score}
                     </div>
@@ -3631,22 +3690,22 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
             {pendingScore === null && pendingPayment === null && !showSetup && !tableAction && (
               <div style={{marginBottom:16}}>
                 <button onClick={()=>setShowScoreSheet(true)}
-                  style={{width:"100%",padding:15,background:game.color,border:"none",borderRadius:14,
-                    color:"#0E0C0A",fontSize:16,fontWeight:800,cursor:"pointer"}}>
+                  style={{width:"100%",padding:16,background:game.color,border:"none",borderRadius:16,
+                    color:"#fff",fontSize:17,fontWeight:700,cursor:"pointer",letterSpacing:"-0.2px"}}>
                   Score this hand
                 </button>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
                   {[
-                    {id:"draw", label:"Draw / wall out", sub:"No one wins"},
+                    {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
                     {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
                     {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
                     {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
-                      style={{padding:"10px 10px",background:"#1A1712",border:"0.5px solid rgba(255,255,255,0.1)",
-                        borderRadius:12,cursor:"pointer",textAlign:"left"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"#F0E8DC"}}>{a.label}</div>
-                      <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",marginTop:2}}>{a.sub}</div>
+                      style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
+                        borderRadius:14,cursor:"pointer",textAlign:"left",boxShadow:"var(--mj-shadow)"}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"var(--mj-ink)"}}>{a.label}</div>
+                      <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:3}}>{a.sub}</div>
                     </button>
                   ))}
                 </div>
@@ -3659,13 +3718,13 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     </button>
                   )}
                   <button onClick={()=>setShowAdjust(v=>!v)}
-                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(255,255,255,0.12)",
-                      borderRadius:10,color:"rgba(200,180,160,0.55)",fontSize:13,cursor:"pointer"}}>
+                    style={{flex:1,padding:10,background:"none",border:"0.5px solid var(--mj-line)",
+                      borderRadius:12,color:"var(--mj-muted)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                     {showAdjust ? "Hide adjust" : "Adjust"}
                   </button>
                   <button onClick={()=>setTableAction("settle")}
-                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(200,146,58,0.4)",
-                      borderRadius:10,color:"#F5C97A",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                    style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(183,121,31,0.35)",
+                      borderRadius:12,color:"#8A5A12",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                     End night
                   </button>
                 </div>
@@ -3680,6 +3739,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   setDraft={setActionDraft}
                   players={players}
                   game={game}
+                  bank={bank}
                   onConfirm={applyException}
                   onCancel={()=>{setTableAction(null);setActionDraft({});}}
                 />
@@ -3890,7 +3950,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
           <div>
             <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
             <div style={{background:`${game.color}15`,border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:game.accent,lineHeight:1.6}}>
-              📋 Source: Dubai Mah Jong 2025 Rulebook + Taiwanese Scoring Booklet. Points are additive — stack them all up.
+              📋 From Anetum’s Taiwanese Mahjong Classes sheet (Dubai table). Points add up. Draw pays 5 each into the Bank; the next Self Pick takes the Bank.
             </div>
             {DXB_REF.map((sec,si)=>(
               <div key={si} style={{marginBottom:16}}>
@@ -3909,7 +3969,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       </div>
 
       {showScoreSheet && (
-        <div style={{position:"fixed",inset:0,zIndex:80,background:"#0E0C0A",maxWidth:480,margin:"0 auto",
+        <div style={{position:"fixed",inset:0,zIndex:80,background:"var(--mj-bg)",maxWidth:480,margin:"0 auto",
           display:"flex",flexDirection:"column"}}>
           <div style={{padding:"14px 16px 12px",borderBottom:"0.5px solid rgba(200,146,58,0.2)",
             display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
@@ -3917,7 +3977,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>
                 {tableAction && tableAction !== "settle" ? tableExceptionMeta(tableAction).title : "Score this hand"}
               </div>
-              <div style={{fontSize:13,color:"rgba(200,180,160,0.45)",marginTop:2}}>Round {round}</div>
+              <div style={{fontSize:14,color:"var(--mj-muted)",marginTop:2}}>Round {round}</div>
             </div>
             <button onClick={()=>{ setShowScoreSheet(false); setTableAction(null); setActionDraft({}); }}
               style={{background:"none",border:"0.5px solid rgba(255,255,255,0.15)",borderRadius:8,
@@ -3933,6 +3993,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 setDraft={setActionDraft}
                 players={players}
                 game={game}
+                bank={bank}
                 onConfirm={applyException}
                 onCancel={()=>{ setTableAction(null); setActionDraft({}); }}
               />

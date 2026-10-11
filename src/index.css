@@ -5,32 +5,57 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+:root {
+  --mj-bg: #F3EEE6;
+  --mj-card: #FFFFFF;
+  --mj-ink: #1C1917;
+  --mj-muted: #6B6560;
+  --mj-line: rgba(28, 25, 23, 0.08);
+  --mj-accent: #B7791F;
+  --mj-accent-soft: #FFF6E5;
+  --mj-good: #2F7D4A;
+  --mj-bad: #C23B3B;
+  --mj-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "DM Sans", system-ui, sans-serif;
+  --mj-shadow: 0 8px 24px rgba(28, 25, 23, 0.06);
+}
+
 html {
   height: 100%;
-  /* Prevent font size inflation on iOS */
   -webkit-text-size-adjust: 100%;
 }
 
 body {
   height: 100%;
-  background: #0E0C0A;
-  color: #E8E0D5;
-  font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
-  /* Smooth scrolling on iOS */
+  background: var(--mj-bg);
+  color: var(--mj-ink);
+  font-family: var(--mj-font);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
+  letter-spacing: -0.01em;
 }
 
 #root {
   height: 100%;
-  /* Safe area insets for iPhone notch / Dynamic Island */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
 
-/* Scrollbar hiding for filter pill rows */
+.mj-page {
+  min-height: 100vh;
+  background: var(--mj-bg);
+  color: var(--mj-ink);
+  font-family: var(--mj-font);
+}
+
+.mj-card {
+  background: var(--mj-card);
+  border: 0.5px solid var(--mj-line);
+  border-radius: 18px;
+  box-shadow: var(--mj-shadow);
+}
+
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -39,7 +64,6 @@ body {
   display: none;
 }
 
-/* Better number inputs on iOS */
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -49,7 +73,11 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
 }
 
-/* Prevent double-tap zoom on buttons */
 button {
   touch-action: manipulation;
+  font-family: inherit;
+}
+
+button:active {
+  transform: scale(0.98);
 }
