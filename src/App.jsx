@@ -1424,10 +1424,32 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
   // ── HOME ──
   if (mode === "home") return (
     <div>
+      <div style={{marginBottom:14}}>
+        <div className="mj-title" style={{fontSize:24}}>Score the hand</div>
+        <div className="mj-meta">Type the points, answer the questions, or scan the tiles.</div>
+      </div>
       {winnerBlock}
 
       <div className="mj-card" style={{padding:20,marginBottom:12}}>
-        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:4}}>Photo of the hand</div>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:6}}>Type the points</div>
+        <div style={{fontSize:13,color:"var(--mj-muted)",lineHeight:1.6,marginBottom:12}}>Already know the total? Enter it and we work out who pays.</div>
+        <button onClick={()=>setMode("enter")}
+          style={{width:"100%",padding:13,background:"var(--mj-ink)",border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+          Enter score
+        </button>
+      </div>
+
+      <div className="mj-card" style={{padding:20,marginBottom:12}}>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:6}}>Answer the questions</div>
+        <div style={{fontSize:13,color:"var(--mj-muted)",lineHeight:1.6,marginBottom:12}}>Walk the Dubai checklist. Same math as the sheet.</div>
+        <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setAiResult(null); setMode("wizard"); }}
+          style={{width:"100%",padding:12,background:"transparent",border:"1px solid var(--mj-line)",borderRadius:12,color:"var(--mj-ink)",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+          Start wizard
+        </button>
+      </div>
+
+      <div className="mj-card" style={{padding:20}}>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:4}}>Scan tiles</div>
         <div style={{fontSize:12,color:game.accent,fontWeight:600,marginBottom:8}}>Optional · Claude fills the checklist</div>
         <div style={{fontSize:13,color:"var(--mj-muted)",lineHeight:1.6,marginBottom:16}}>
           Photograph the winning tiles. You can still change every answer before the total is calculated.
@@ -1436,49 +1458,10 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
           <div style={{background:"rgba(220,80,80,0.12)",border:"0.5px solid rgba(220,80,80,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#E05050"}}>{analysisError}</div>
         )}
         <button onClick={()=>{ setMode("camera"); setTimeout(startCamera,100); }}
-          style={{width:"100%",padding:13,background:"transparent",border:`1px solid ${game.color}55`,borderRadius:12,color:game.accent,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+          style={{width:"100%",padding:13,background:"transparent",border:"1px solid var(--mj-line)",borderRadius:12,color:"var(--mj-ink)",fontSize:14,fontWeight:700,cursor:"pointer"}}>
           Open camera
         </button>
       </div>
-
-      <div className="mj-card" style={{padding:20,marginBottom:12}}>
-        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:6}}>Enter the score</div>
-        <div style={{fontSize:13,color:"var(--mj-muted)",lineHeight:1.6,marginBottom:12}}>Type the points if you already know the total.</div>
-        <button onClick={()=>setMode("enter")}
-          style={{width:"100%",padding:13,background:game.color,border:"none",borderRadius:12,color:"#141210",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-          Enter score
-        </button>
-      </div>
-
-      <div className="mj-card" style={{padding:20}}>
-        <div style={{fontSize:17,fontWeight:700,color:"var(--mj-ink)",marginBottom:6}}>Answer the questions</div>
-        <div style={{fontSize:13,color:"var(--mj-muted)",lineHeight:1.6,marginBottom:12}}>Skip the photo and score the hand yourself.</div>
-        <button onClick={()=>{ setPrefilledAnswers(buildWindPrefill({}, selectedWinner)); setAiResult(null); setMode("wizard"); }}
-          style={{width:"100%",padding:12,background:"transparent",border:`1px solid ${game.color}55`,borderRadius:12,color:game.accent,fontSize:14,fontWeight:700,cursor:"pointer"}}>
-          Start wizard
-        </button>
-      </div>
-
-      {onTableAction && (
-        <div style={{marginTop:12}}>
-          <div style={{fontSize:12,color:"var(--mj-muted)",fontWeight:600,marginBottom:8}}>No win this hand</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[
-              {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
-              {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
-              {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
-              {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
-            ].map(a=>(
-              <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
-                style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
-                  borderRadius:14,cursor:"pointer",textAlign:"left",boxShadow:"var(--mj-shadow)"}}>
-                <div style={{fontSize:14,fontWeight:700,color:"var(--mj-ink)"}}>{a.label}</div>
-                <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:3}}>{a.sub}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -1836,9 +1819,9 @@ const DXB_REF = [
   { section:"Gong (Kong = 4 of same)", items:[{name:"Open Gong (counts as 1 Concealed Pong)",pts:1},{name:"Concealed Gong (+collect 5 pts each immediately)",pts:1},{name:"Win by Robbing a Gong",pts:10},{name:"Win by Self Drawing a Gong",pts:30},{name:"Four in 2 Ways (same 4 tiles = Sheung+Pong)",pts:5},{name:"Four in 3 Ways (2 Sheungs + pair)",pts:15},{name:"Four in 4 Ways (4 Sheungs)",pts:20}] },
   { section:"Terminals (1s and 9s)", items:[{name:"No Terminal Tiles (with honours OK)",pts:5},{name:"No Terminals AND No Honours",pts:8},{name:"All Terminals WITH Honours",pts:20},{name:"All Terminals — No Honours",pts:40},{name:"1×Terminal Pong Set (111+999 same suit)",pts:5},{name:"2×Terminal Pong Sets (mix)",pts:20},{name:"1×Terminal Sheung (123+789 same suit)",pts:5},{name:"2×Terminal Pure Sheung Sets",pts:20}] },
   { section:"Special Hands", items:[{name:"Nico Nico (7 pairs + 1 pong) — No Closing",pts:40},{name:"Nico Nico + 1 Gong",pts:"+10"},{name:"Nico Nico + 2 Gongs",pts:"+25"},{name:"13 Orphans — No Closing",pts:90},{name:"16 Orphans — No Closing",pts:50},{name:"16 Orphans with 1s & 9s in all suits",pts:"+10"},{name:"Jade Hand (Green Dragon pong + all Bamboo)",pts:20},{name:"Ruby Hand (Red Dragon pong + all Characters)",pts:20},{name:"Diamond Hand (White Dragon pong + all Circles)",pts:20}] },
-  { section:"Penalties", items:[{name:"False Mahjong (game ends, same dealer)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
+  { section:"Penalties", items:[{name:"False Mahjong — 25 to each other player (dealer stays)",pts:-25},{name:"Chasing Wind/Dragon Tiles",pts:-5},{name:"Chasing Suit Tiles",pts:-10}] },
   { section:"Draw / Bank", items:[
-    {name:"Draw / wall out — each player pays 5 into the Bank",pts:-5},
+    {name:"Draw / wall out — each pays 5 into the Bank, East moves",pts:-5},
     {name:"Bank keeps adding on every draw",pts:"…"},
     {name:"Next Self Pick takes the whole Bank, then Bank resets to 0",pts:"Bank"},
     {name:"Discard wins do not take the Bank",pts:"—"},
@@ -2059,16 +2042,331 @@ function formatEndedAt(iso) {
   } catch { return ""; }
 }
 
+const WIND_DISC = {
+  E: { bg: "#1C1916", fg: "#F5E6C8", ring: "#C8923A" },
+  S: { bg: "#16324A", fg: "#D6EEF8", ring: "#4A7FA5" },
+  W: { bg: "#3A2A22", fg: "#F0E4D8", ring: "#8B6B4A" },
+  N: { bg: "#1A3320", fg: "#D8F0DC", ring: "#5A8A6A" },
+};
+
+function WindDisc({ windId = "E", size = 56 }) {
+  const w = WINDS.find(x => x.id === windId) || WINDS[0];
+  const t = WIND_DISC[w.id] || WIND_DISC.E;
+  return (
+    <div className="mj-wind-disc" style={{
+      width: size, height: size, background: t.bg, color: t.fg,
+      boxShadow: `0 0 0 3px ${t.ring}33, 0 8px 20px rgba(20,18,16,0.12)`,
+    }}>
+      <div style={{fontSize: size * 0.36, fontWeight: 900, lineHeight: 1}}>{w.id}</div>
+      <div style={{fontSize: size * 0.2, fontWeight: 700, opacity: 0.8, marginTop: 1}}>{w.char}</div>
+    </div>
+  );
+}
+
+function NavIcon({ name, on }) {
+  const c = on ? "var(--mj-ink)" : "var(--mj-muted)";
+  if (name === "track") return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/>
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/>
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/>
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>
+    </svg>
+  );
+  if (name === "score") return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="12" r="8"/>
+      <path d="M12 8v8M8 12h8"/>
+    </svg>
+  );
+  if (name === "hands") return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round">
+      <path d="M7 4.5h8.5A2.5 2.5 0 0 1 18 7v12.5H8.5A1.5 1.5 0 0 1 7 18V4.5z"/>
+      <path d="M7 18a1.5 1.5 0 0 0-1.5 1.5H18"/>
+    </svg>
+  );
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="8" r="3.2"/>
+      <path d="M5.5 19c1.2-3 3.4-4.5 6.5-4.5s5.3 1.5 6.5 4.5"/>
+    </svg>
+  );
+}
+
+function BottomNav({ tabs, active, onChange }) {
+  return (
+    <nav className="mj-bottom-nav">
+      {tabs.map(t => (
+        <button key={t.id} className={active === t.id ? "on" : ""} onClick={() => onChange(t.id)}>
+          <NavIcon name={t.icon} on={active === t.id}/>
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function AppTopBar({ roundWind, round, dealer, dealerStreak, bank, live, right }) {
+  const w = WINDS.find(x => x.id === roundWind) || WINDS[0];
+  return (
+    <div className="mj-topbar">
+      <WindDisc windId={roundWind} size={54}/>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div className="mj-kicker">{w.label} round{live ? " · live" : ""}</div>
+        <div className="mj-title">Hand {round}</div>
+        <div className="mj-meta">
+          {dealer?.name || "Dealer"} deals
+          {dealerStreak > 0 ? ` · 連莊 ×${dealerStreak}` : ""}
+          {bank > 0 ? ` · Bank ${bank}` : ""}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function TrackPlayerCard({
+  player, isDealer, isRoundWind, dealerStreak,
+  editing, onEdit, onNameChange, onNameBlur, readOnly,
+}) {
+  const w = WINDS.find(x => x.id === player.windId) || WINDS[0];
+  const scoreColor = player.score > 0 ? "#2F7D4A" : player.score < 0 ? "#C23B3B" : "var(--mj-muted)";
+  return (
+    <div className={`mj-seat-card${isDealer ? " dealer" : ""}`}>
+      <div className="mj-seat-wind" style={{background: player.color, color: "#141210"}}>
+        <div className="mj-seat-letter">{w.id}</div>
+        <div className="mj-seat-char">{w.char}</div>
+      </div>
+      <div className="mj-seat-body">
+        <div style={{flex: 1, minWidth: 0}}>
+          {editing ? (
+            <input autoFocus value={player.name}
+              onChange={e => onNameChange(e.target.value)}
+              onBlur={onNameBlur}
+              onKeyDown={e => e.key === "Enter" && onNameBlur()}
+              style={{width: "100%", background: "transparent", border: "none",
+                borderBottom: `1.5px solid ${player.color}`, color: "var(--mj-ink)",
+                fontSize: 16, fontWeight: 700, outline: "none", fontFamily: "inherit"}}/>
+          ) : (
+            <div onClick={readOnly ? undefined : onEdit}
+              style={{fontSize: 16, fontWeight: 750, color: "var(--mj-ink)", cursor: readOnly ? "default" : "pointer",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
+              {player.name}
+            </div>
+          )}
+          <div style={{display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5}}>
+            <span style={{fontSize: 11, fontWeight: 700, color: player.color}}>{w.label}</span>
+            {isDealer && (
+              <span style={{fontSize: 10, fontWeight: 800, color: "#7A4E0E",
+                background: "rgba(245,201,122,0.22)", padding: "1px 6px", borderRadius: 6}}>
+                {dealerStreak > 0 ? `Dealer · 連莊 ×${dealerStreak}` : "Dealer"}
+              </span>
+            )}
+            {isRoundWind && !isDealer && (
+              <span style={{fontSize: 10, fontWeight: 700, color: "#7A4E0E",
+                background: "rgba(183,121,31,0.12)", padding: "1px 6px", borderRadius: 6}}>+1 wind</span>
+            )}
+          </div>
+        </div>
+        <div className="mj-seat-score" style={{color: scoreColor}}>
+          {player.score > 0 ? "+" : ""}{player.score}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HandHistoryList({ history, players, accent }) {
+  if (!history?.length) return null;
+  return (
+    <div>
+      <div className="mj-section-label">History · {history.length} hand{history.length !== 1 ? "s" : ""}</div>
+      {[...history].reverse().map((r, i) => {
+        const winner = players.find(p => p.id === r.winnerId);
+        return (
+          <div key={r.id || `${r.type || "h"}-${r.round}-${i}`} className="mj-card"
+            style={{padding: "10px 14px", marginBottom: 8}}>
+            <div style={{display: "flex", justifyContent: "space-between", marginBottom: 5}}>
+              <div style={{fontSize: 12, color: "var(--mj-muted)"}}>Hand {r.round} · {historyLabel(r)}</div>
+              {winner && <div style={{fontSize: 12, color: accent, fontWeight: 700}}>{winner.name}</div>}
+            </div>
+            <div style={{display: "flex", gap: 12, flexWrap: "wrap"}}>
+              {(r.entries || []).map(e => (
+                <span key={e.pid} style={{fontSize: 13,
+                  color: e.delta > 0 ? "#2F7D4A" : e.delta < 0 ? "#C23B3B" : "var(--mj-muted)"}}>
+                  {e.name}: {e.delta > 0 ? "+" : ""}{e.delta}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PastNightsList() {
+  const [archive, setArchive] = useState(() => loadArchive());
+  const [openPastId, setOpenPastId] = useState(null);
+  if (!archive.length) {
+    return (
+      <div style={{textAlign: "center", padding: "18px 12px", color: "var(--mj-muted)", fontSize: 13}}>
+        Finished nights show up here after you tap Finish.
+      </div>
+    );
+  }
+  return archive.map(g => {
+    const open = openPastId === g.id;
+    const ranked = [...(g.players || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const winner = ranked[0];
+    return (
+      <div key={g.id} className="mj-card" style={{marginBottom: 8, overflow: "hidden"}}>
+        <button onClick={() => setOpenPastId(open ? null : g.id)}
+          style={{width: "100%", padding: "12px 14px", background: "none", border: "none",
+            cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", gap: 10}}>
+          <div>
+            <div style={{fontSize: 13, fontWeight: 700, color: "var(--mj-ink)"}}>{formatEndedAt(g.endedAt)}</div>
+            <div style={{fontSize: 12, color: "var(--mj-muted)", marginTop: 2}}>
+              {g.rounds || 0} hand{(g.rounds || 0) !== 1 ? "s" : ""}
+              {winner ? ` · ${winner.name} ${winner.score > 0 ? "+" : ""}${winner.score}` : ""}
+            </div>
+          </div>
+          <span style={{color: "var(--mj-muted)", fontSize: 12}}>{open ? "▲" : "▼"}</span>
+        </button>
+        {open && (
+          <div style={{padding: "0 14px 12px"}}>
+            {ranked.map(p => (
+              <div key={p.id} style={{display: "flex", justifyContent: "space-between", padding: "4px 0"}}>
+                <span style={{fontSize: 13, color: "var(--mj-muted)"}}>{p.name}</span>
+                <span style={{fontSize: 13, fontWeight: 700, color: p.score > 0 ? "#2F7D4A" : p.score < 0 ? "#C23B3B" : "var(--mj-muted)"}}>
+                  {p.score > 0 ? "+" : ""}{p.score}
+                </span>
+              </div>
+            ))}
+            <button onClick={() => {
+              const next = loadArchive().filter(x => x.id !== g.id);
+              saveArchive(next);
+              setArchive(next);
+            }}
+              style={{marginTop: 8, background: "none", border: "none", color: "#C23B3B",
+                fontSize: 12, cursor: "pointer", padding: 0}}>
+              Delete this night
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  });
+}
+
+function HandsWiki({ game, allHands, cats, filteredHands, handFilter, setHandFilter, expandedHand, setExpandedHand, isDXB }) {
+  return (
+    <div>
+      <div className="mj-section-label">{game.name} · {allHands.length} hands</div>
+      <div className="no-scrollbar" style={{display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 14}}>
+        {cats.map(f => (
+          <button key={f.id} onClick={() => { setHandFilter(f.id); setExpandedHand(null); }}
+            style={{flexShrink: 0, padding: "6px 12px", borderRadius: 20,
+              background: handFilter === f.id ? game.color : "transparent",
+              border: `0.5px solid ${handFilter === f.id ? game.color : "var(--mj-line)"}`,
+              color: handFilter === f.id ? "#141210" : "var(--mj-muted)",
+              fontSize: 12, fontWeight: 650, cursor: "pointer", whiteSpace: "nowrap"}}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {filteredHands.map((h, i) => {
+        const expanded = expandedHand === i;
+        const val = h.pts ?? h.faan ?? h.tai;
+        const lim = String(val || "").toLowerCase().includes("limit") || Number(val) >= 40;
+        return (
+          <div key={i} className="mj-card" style={{marginBottom: 10, overflow: "hidden",
+            borderColor: lim ? `${game.color}60` : undefined}}>
+            <div onClick={() => setExpandedHand(expanded ? null : i)}
+              style={{display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                padding: "13px 14px", cursor: "pointer"}}>
+              <div style={{flex: 1, marginRight: 10}}>
+                <div style={{fontSize: 14, fontWeight: 650, color: "var(--mj-ink)"}}>{h.name}</div>
+              </div>
+              <div style={{display: "flex", alignItems: "center", gap: 8, flexShrink: 0}}>
+                <div style={{background: lim ? `${game.color}30` : "#F4F0E8",
+                  border: `0.5px solid ${lim ? game.color : "var(--mj-line)"}`,
+                  borderRadius: 8, padding: "4px 12px", minWidth: 40, textAlign: "center"}}>
+                  <div style={{fontSize: 14, fontWeight: 700, color: game.accent}}>
+                    {val}{isDXB && typeof val === "number" ? " pts" : ""}
+                  </div>
+                </div>
+                <span style={{fontSize: 14, color: "var(--mj-muted)"}}>{expanded ? "▲" : "▼"}</span>
+              </div>
+            </div>
+            <div style={{padding: "0 14px 10px", fontSize: 12, color: "var(--mj-muted)", lineHeight: 1.5}}>{h.desc}</div>
+            {expanded && h.groups && h.groups.length > 0 && (
+              <div style={{borderTop: "0.5px solid var(--mj-line)"}}>
+                <div style={{padding: "8px 14px 2px", fontSize: 10, color: "var(--mj-muted)",
+                  letterSpacing: 1, textTransform: "uppercase"}}>Example hand</div>
+                <HandDiagram groups={h.groups} accentColor={game.color} tileSize={40}/>
+                <div style={{height: 12}}/>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {filteredHands.length === 0 && <div style={{textAlign: "center", padding: 40, color: "var(--mj-muted)"}}>No hands for this filter.</div>}
+    </div>
+  );
+}
+
+function RulesRef({ game, note }) {
+  return (
+    <div>
+      <div className="mj-section-label">Dubai scoring</div>
+      <div style={{background: `${game.color}15`, border: `0.5px solid ${game.color}40`,
+        borderRadius: 12, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: game.accent, lineHeight: 1.6}}>
+        {note || "Points add up. Draw pays 5 each into the Bank and East moves; the next Self Pick takes the Bank. False Mahjong pays 25 to each other player."}
+      </div>
+      {DXB_REF.map((sec, si) => (
+        <div key={si} style={{marginBottom: 16}}>
+          <div style={{fontSize: 11, color: game.color, letterSpacing: 1.5, textTransform: "uppercase",
+            fontWeight: 700, marginBottom: 8}}>{sec.section}</div>
+          {sec.items.map((item, ii) => (
+            <div key={ii} style={{display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "8px 12px", background: ii % 2 === 0 ? "#FFFFFF" : "#F4F0E8", borderRadius: 8, marginBottom: 2}}>
+              <span style={{fontSize: 13, color: "var(--mj-muted)", flex: 1, paddingRight: 10}}>{item.name}</span>
+              <span style={{fontSize: 14, fontWeight: 700,
+                color: Number(item.pts) < 0 ? "#C23B3B" : game.accent, flexShrink: 0, minWidth: 40, textAlign: "right"}}>
+                {Number(item.pts) > 0 ? "+" : ""}{item.pts}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WikiPanel(props) {
+  const [section, setSection] = useState("hands");
+  return (
+    <div>
+      <div className="mj-segment">
+        <button className={section === "hands" ? "on" : ""} onClick={() => setSection("hands")}>Hands</button>
+        <button className={section === "rules" ? "on" : ""} onClick={() => setSection("rules")}>How to</button>
+      </div>
+      {section === "hands" ? <HandsWiki {...props}/> : <RulesRef game={props.game}/>}
+    </div>
+  );
+}
+
 function tableExceptionMeta(type) {
   if (type === "draw") return {
     title: "Draw / wall out",
-    blurb: `No one won. Each player pays ${DXB_SCORE.draw_bank} into the Bank. The Bank sits until someone Self Picks — that player takes it all and the Bank resets. East keeps the deal.`,
-    confirm: "Confirm draw · pay the Bank",
+    blurb: `No one won. Each player pays ${DXB_SCORE.draw_bank} into the Bank. The Bank sits until someone Self Picks — that player takes it all and the Bank resets. East passes the deal.`,
+    confirm: "Confirm draw · pay the Bank · East moves",
   };
   if (type === "false_mj") return {
     title: "False Mahjong",
-    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts, split among the others. The hand ends and the dealer stays.`,
-    confirm: `Confirm −${DXB_SCORE.false_mahjong} · dealer stays`,
+    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts to each of the other three. The hand ends and the dealer stays.`,
+    confirm: `Confirm −${DXB_SCORE.false_mahjong} each · dealer stays`,
   };
   if (type === "chase") return {
     title: "Chasing",
@@ -2092,7 +2390,7 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
       ready: true, type,
       deltas: Object.fromEntries(players.map(p => [p.id, -amt])),
       payments: players.map(p => ({ fromId: p.id, toId: "_bank", amount: amt })),
-      bumpRound: true, keepEast: true,
+      bumpRound: true, keepEast: false,
       extra: { bankAdd: pot, bankBefore: bank, bankAfter: bank + pot },
     };
   }
@@ -2100,17 +2398,11 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
     const who = draft.whoId;
     if (!who) return empty;
     const others = players.filter(p => p.id !== who);
-    const total = DXB_SCORE.false_mahjong;
-    const base = Math.floor(total / Math.max(others.length, 1));
-    let rem = total - base * others.length;
-    const deltas = { [who]: -total };
-    const payments = [];
-    others.forEach(p => {
-      const extra = rem > 0 ? 1 : 0;
-      rem -= extra;
-      const amt = base + extra;
+    const amt = DXB_SCORE.false_mahjong;
+    const deltas = { [who]: -amt * others.length };
+    const payments = others.map(p => {
       deltas[p.id] = amt;
-      payments.push({ fromId: who, toId: p.id, amount: amt });
+      return { fromId: who, toId: p.id, amount: amt };
     });
     return { ready: true, type, deltas, payments, bumpRound: true, keepEast: true, extra: { offenderId: who } };
   }
@@ -2191,6 +2483,13 @@ function ExceptionPaymentPreview({ players, ledger, game }) {
           background:"rgba(245,201,122,0.1)",border:"0.5px solid rgba(245,201,122,0.3)",
           fontSize:12,color:"#7A4E0E"}}>
           🎴 East stays — dealer keeps the deal, 連莊 streak +1
+        </div>
+      )}
+      {!ledger.keepEast && ledger.bumpRound && (
+        <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+          background:"rgba(100,180,100,0.1)",border:"0.5px solid rgba(100,180,100,0.3)",
+          fontSize:12,color:"#2F7D4A"}}>
+          🔄 Dealer passes — East moves to the next seat
         </div>
       )}
       {!ledger.keepEast && !ledger.bumpRound && (
@@ -2414,8 +2713,7 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
   const [error, setError] = useState("");
   const [showJoin, setShowJoin] = useState(false);
   const [showPast, setShowPast] = useState(false);
-  const [archive, setArchive] = useState(() => loadArchive());
-  const [openPastId, setOpenPastId] = useState(null);
+  const [archive] = useState(() => loadArchive());
   const regulars = loadRegulars();
 
   const handleJoin = async () => {
@@ -2434,9 +2732,9 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
       alignItems:"center",justifyContent:"center",padding:"32px 20px"}}>
       {/* Logo */}
       <div style={{marginBottom:32,textAlign:"center"}}>
-        <div style={{fontSize:64,marginBottom:8}}>🀄</div>
-        <div style={{fontSize:28,fontWeight:800,color:"var(--mj-ink)",letterSpacing:"-0.7px"}}>Mahjong</div>
-        <div style={{fontSize:13,color:"#C8923A",marginTop:4,fontWeight:600,letterSpacing:0.4}}>Dubai Style</div>
+        <WindDisc windId="E" size={72}/>
+        <div style={{fontSize:28,fontWeight:800,color:"var(--mj-ink)",letterSpacing:"-0.7px",marginTop:16}}>Mahjong</div>
+        <div style={{fontSize:14,color:"var(--mj-muted)",marginTop:4,fontWeight:600}}>Dubai table companion</div>
       </div>
 
       {/* Options */}
@@ -2465,8 +2763,8 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
             display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
           <span style={{fontSize:28}}>🎲</span>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:"var(--mj-ink)"}}>New game</div>
-              <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:2}}>Fresh local game on this device</div>
+            <div style={{fontSize:15,fontWeight:700,color:"var(--mj-ink)"}}>Set up a game</div>
+              <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:2}}>Four names, then Track the night</div>
           </div>
         </button>
 
@@ -2540,53 +2838,7 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
 
       {showPast && (
         <div style={{width:"100%",maxWidth:380,marginTop:12}}>
-          {archive.length === 0 ? (
-            <div style={{textAlign:"center",padding:"18px 12px",color:"var(--mj-muted)",fontSize:13}}>
-              Finished nights will show up here after you tap End night.
-            </div>
-          ) : archive.map(g => {
-            const open = openPastId === g.id;
-            const ranked = [...(g.players||[])].sort((a,b)=>(b.score||0)-(a.score||0));
-            const winner = ranked[0];
-            return (
-              <div key={g.id} style={{background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
-                borderRadius:12,marginBottom:8,overflow:"hidden"}}>
-                <button onClick={()=>setOpenPastId(open?null:g.id)}
-                  style={{width:"100%",padding:"12px 14px",background:"none",border:"none",
-                    cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",gap:10}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:700,color:"var(--mj-ink)"}}>{formatEndedAt(g.endedAt)}</div>
-                    <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:2}}>
-                      {g.rounds||0} hand{(g.rounds||0)!==1?"s":""}
-                      {winner ? ` · ${winner.name} ${winner.score>0?"+":""}${winner.score}` : ""}
-                    </div>
-                  </div>
-                  <span style={{color:"var(--mj-muted)",fontSize:12}}>{open?"▲":"▼"}</span>
-                </button>
-                {open && (
-                  <div style={{padding:"0 14px 12px"}}>
-                    {ranked.map(p=>(
-                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
-                        <span style={{fontSize:13,color:"var(--mj-muted)"}}>{p.name}</span>
-                        <span style={{fontSize:13,fontWeight:700,color:p.score>0?"#8FBC8F":p.score<0?"#E05050":"var(--mj-muted)"}}>
-                          {p.score>0?"+":""}{p.score}
-                        </span>
-                      </div>
-                    ))}
-                    <button onClick={()=>{
-                      const next = loadArchive().filter(x=>x.id!==g.id);
-                      saveArchive(next);
-                      setArchive(next);
-                    }}
-                      style={{marginTop:8,background:"none",border:"none",color:"#E05050",
-                        fontSize:12,cursor:"pointer",padding:0}}>
-                      Delete this night
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <PastNightsList/>
         </div>
       )}
 
@@ -2601,12 +2853,11 @@ function LandingScreen({ onContinueLocal, onNewLocal, onCreateRoom, onJoinRoom }
 function GuestView({ room, onLeave }) {
   const [gameState, setGameState] = useState(room.game_state || {});
   const [lastUpdate, setLastUpdate] = useState(new Date());
-  const [tab, setTab] = useState("players");
+  const [tab, setTab] = useState("track");
   const [handFilter, setHandFilter] = useState("all");
   const [expandedHand, setExpandedHand] = useState(null);
 
   const game = GAMES[0]; // Dubai by default; could read from gameState.gameId
-  const gameColor = game.color;
   const gameAccent = game.accent;
 
   // Poll every 3 seconds for live updates
@@ -2627,7 +2878,6 @@ function GuestView({ room, onLeave }) {
   const roundHistory = gameState.roundHistory || [];
   const sorted = [...players].sort((a,b) => b.score - a.score);
   const dealer = players.find(p => p.windId === "E");
-  const rw = WINDS.find(w => w.id === roundWind);
   const dealerStreak = gameState.dealerStreak || 0;
   const bank = gameState.bank || 0;
 
@@ -2637,239 +2887,95 @@ function GuestView({ room, onLeave }) {
   const filteredHands = allHands.filter(h => handFilter==="all" || h.cat===handFilter);
 
   const tabs = [
-    {id:"players", label:"Table",  icon:"🀄"},
-    {id:"hands",   label:"Hands",   icon:"📖"},
-    {id:"ref",     label:"Rules",   icon:"📋"},
+    {id:"track", label:"Track", icon:"track"},
+    {id:"hands", label:"Hands", icon:"hands"},
+    {id:"you",   label:"You",   icon:"you"},
   ];
 
   return (
     <div className="mj-page" style={{minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
-
-      {/* Header */}
-      <div style={{padding:"14px 18px 10px",background:"#1A1410",
-        borderBottom:"0.5px solid rgba(200,146,58,0.2)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-          <div>
-            <div style={{fontSize:11,color:gameColor,letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>
-              👁️ Room {room.code} · Read only
-            </div>
-            <div style={{fontSize:16,fontWeight:700,color:"var(--mj-ink)",marginTop:1}}>Round {round}</div>
-          </div>
-          <button onClick={onLeave}
-            style={{background:"none",border:"0.5px solid var(--mj-line)",borderRadius:8,
-              color:"var(--mj-muted)",fontSize:11,padding:"5px 12px",cursor:"pointer"}}>
-            Leave
-          </button>
-        </div>
-        {/* Live pulse + dealer */}
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:"#4CAF50",
-              animation:"gpulse 2s ease-in-out infinite"}}/>
-            <div style={{fontSize:10,color:"var(--mj-muted)"}}>
-              {lastUpdate.toLocaleTimeString()}
+      <AppTopBar
+        roundWind={roundWind}
+        round={round}
+        dealer={dealer}
+        dealerStreak={dealerStreak}
+        bank={bank}
+        live
+        right={(
+          <div style={{textAlign:"right"}}>
+            <button onClick={onLeave}
+              style={{background:"#FFFFFF",border:"0.5px solid var(--mj-line)",borderRadius:8,
+                color:"var(--mj-muted)",fontSize:11,padding:"5px 12px",cursor:"pointer"}}>
+              Leave
+            </button>
+            <div style={{fontSize:11,fontWeight:700,color:gameAccent,marginTop:6}}>
+              {room.code} · watch
             </div>
           </div>
-          {rw&&<div style={{fontSize:11,color:gameColor,background:`${gameColor}15`,
-            borderRadius:10,padding:"1px 8px",fontWeight:600}}>
-            {rw.emoji} {rw.label} Round
-          </div>}
-          {dealer&&<div style={{fontSize:11,color:"#7A4E0E",background:"rgba(245,201,122,0.12)",
-            borderRadius:10,padding:"1px 8px",fontWeight:600,marginLeft:"auto"}}>
-            🎴 {dealer.name} deals{dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}{bank>0 ? ` · Bank ${bank}` : ""}
-          </div>}
-        </div>
-        <style>{`@keyframes gpulse{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
-      </div>
+        )}
+      />
 
-      {/* Tab bar */}
-      <div style={{display:"flex",background:"#121008",borderBottom:"0.5px solid var(--mj-line)",
-        position:"sticky",top:82,zIndex:40}}>
-        {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{flex:1,padding:"10px 4px 9px",background:"none",border:"none",
-              borderBottom:tab===t.id?`2px solid ${gameColor}`:"2px solid transparent",
-              color:tab===t.id?gameAccent:"var(--mj-muted)",
-              fontSize:10,fontWeight:600,letterSpacing:0.5,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <span style={{fontSize:16}}>{t.icon}</span>{t.label.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      <div style={{padding:"16px 16px 80px"}}>
-
-        {/* ── SCORES TAB ── */}
-        {tab==="players" && (
+      <div style={{padding:"16px 16px 108px"}}>
+        {tab==="track" && (
           <div>
-            {/* Read-only banner */}
             <div style={{background:"rgba(74,127,165,0.12)",border:"0.5px solid rgba(74,127,165,0.3)",
-              borderRadius:10,padding:"8px 14px",marginBottom:14,
-              display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>👁️</span>
-              <div style={{fontSize:12,color:"var(--mj-muted)"}}>
-                You are watching this game. Only the host can enter scores.
-              </div>
+              borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"var(--mj-muted)"}}>
+              Watching {room.code}. Only the host can record a win.
+              <div style={{fontSize:11,marginTop:4}}>{lastUpdate.toLocaleTimeString()}</div>
             </div>
-
-            {/* Scoreboard */}
             {sorted.length === 0 ? (
               <div style={{textAlign:"center",padding:"60px 20px",color:"var(--mj-muted)"}}>
-                <div style={{fontSize:40,marginBottom:12}}>⏳</div>
-                <div style={{fontSize:15,color:"var(--mj-muted)"}}>Waiting for the host to start…</div>
+                <div style={{fontSize:15}}>Waiting for the host to start…</div>
               </div>
-            ) : sorted.map((p,i) => {
-              const wInfo = WINDS.find(w=>w.id===p.windId);
-              const isDealer = p.windId==="E";
-              return (
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,
-                  background:isDealer?`${p.color}20`:i===0?`${p.color}12`:"#FFFFFF",
-                  border:isDealer?`1.5px solid ${p.color}60`:i===0?`1px solid ${p.color}30`:"0.5px solid var(--mj-line)",
-                  borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:p.color,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
-                    {i===0?"👑":i+1}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                      <span style={{fontSize:14,fontWeight:700,color:"var(--mj-ink)"}}>{p.name}</span>
-                      <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
-                        padding:"1px 6px",borderRadius:8}}>
-                        {wInfo?.emoji} {wInfo?.label}
-                      </span>
-                      {isDealer&&<span style={{fontSize:10,color:"#7A4E0E",
-                        background:"rgba(245,201,122,0.15)",padding:"1px 6px",
-                        borderRadius:6,fontWeight:700}}>
-                        {dealerStreak>0 ? `DEALER · 連莊 ×${dealerStreak}` : "DEALER"}
-                      </span>}
-                    </div>
-                  </div>
-                  <div style={{fontSize:24,fontWeight:900,
-                    color:p.score>0?gameAccent:p.score<0?"#E05050":"var(--mj-muted)"}}>
-                    {p.score>0?"+":""}{p.score}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Round history */}
-            {roundHistory.length>0&&(
-              <div style={{marginTop:20}}>
-                <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,
-                  textTransform:"uppercase",marginBottom:10}}>
-                  History · {roundHistory.length} rounds
-                </div>
-                {[...roundHistory].reverse().slice(0,8).map((r,i)=>{
-                  const winner = players.find(p=>p.id===r.winnerId);
-                  return (
-                    <div key={r.id || `${r.type||"h"}-${r.round}-${i}`} style={{background:"#131109",borderRadius:10,
-                      border:"0.5px solid var(--mj-line)",padding:"10px 14px",marginBottom:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontSize:11,color:"var(--mj-muted)"}}>Round {r.round} · {historyLabel(r)}</span>
-                        {winner&&<span style={{fontSize:11,color:gameAccent,fontWeight:600}}>🏆 {winner.name}</span>}
-                      </div>
-                      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                        {r.entries?.map(e=>(
-                          <span key={e.pid} style={{fontSize:13,
-                            color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"var(--mj-muted)"}}>
-                            {e.name}: {e.delta>0?"+":""}{e.delta}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            ) : [...players].sort((a,b)=>["E","S","W","N"].indexOf(a.windId)-["E","S","W","N"].indexOf(b.windId)).map(p => (
+              <TrackPlayerCard
+                key={p.id}
+                player={p}
+                isDealer={p.windId==="E"}
+                isRoundWind={p.windId===roundWind}
+                dealerStreak={dealerStreak}
+                readOnly
+              />
+            ))}
+            <div style={{marginTop:16}}>
+              <HandHistoryList history={roundHistory} players={players} accent={gameAccent}/>
+            </div>
           </div>
         )}
 
-        {/* ── HANDS TAB — identical to host ── */}
-        {tab==="hands"&&(
+        {tab==="hands" && (
+          <WikiPanel
+            game={game}
+            allHands={allHands}
+            cats={cats}
+            filteredHands={filteredHands}
+            handFilter={handFilter}
+            setHandFilter={setHandFilter}
+            expandedHand={expandedHand}
+            setExpandedHand={setExpandedHand}
+            isDXB
+          />
+        )}
+
+        {tab==="you" && (
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase"}}>{game.name} · {allHands.length} hands</div>
-            </div>
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:14,scrollbarWidth:"none"}}>
-              {cats.map(f=>(
-                <button key={f.id} onClick={()=>{setHandFilter(f.id);setExpandedHand(null);}}
-                  style={{flexShrink:0,padding:"5px 12px",borderRadius:20,
-                    background:handFilter===f.id?gameColor:"transparent",
-                    border:`0.5px solid ${handFilter===f.id?gameColor:"var(--mj-line)"}`,
-                    color:handFilter===f.id?"#0E0C0A":"var(--mj-muted)",
-                    fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                  {f.label}
-                </button>
+            <div className="mj-title" style={{fontSize:24,marginBottom:4}}>You</div>
+            <div className="mj-meta" style={{marginBottom:16}}>Watching room {room.code}.</div>
+            <div className="mj-card" style={{padding:16}}>
+              <div className="mj-section-label">Tonight</div>
+              {sorted.map(p=>(
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0"}}>
+                  <span style={{fontSize:14,fontWeight:600}}>{p.name}</span>
+                  <span style={{fontSize:14,fontWeight:800,color:p.score>0?"#2F7D4A":p.score<0?"#C23B3B":"var(--mj-muted)"}}>
+                    {p.score>0?"+":""}{p.score}
+                  </span>
+                </div>
               ))}
             </div>
-            {filteredHands.map((h,i)=>{
-              const expanded = expandedHand===i;
-              const val = h.pts??h.faan??h.tai;
-              const lim = String(val||"").toLowerCase().includes("limit")||Number(val)>=40;
-              return (
-                <div key={i} style={{background:"#FFFFFF",
-                  border:`0.5px solid ${lim?gameColor+"60":"var(--mj-line)"}`,
-                  borderRadius:14,marginBottom:10,overflow:"hidden"}}>
-                  <div onClick={()=>setExpandedHand(expanded?null:i)}
-                    style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
-                      padding:"13px 14px",cursor:"pointer"}}>
-                    <div style={{flex:1,marginRight:10}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"var(--mj-ink)"}}>{h.name}</div>
-                      <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:2}}>{h.desc}</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                      <div style={{background:lim?`${gameColor}30`:"#F4F0E8",
-                        border:`0.5px solid ${lim?gameColor:"var(--mj-line)"}`,
-                        borderRadius:8,padding:"4px 12px",minWidth:40,textAlign:"center"}}>
-                        <div style={{fontSize:14,fontWeight:700,color:gameAccent}}>{val}{typeof val==="number"?" pts":""}</div>
-                      </div>
-                      <span style={{fontSize:14,color:"var(--mj-muted)"}}>{expanded?"▲":"▼"}</span>
-                    </div>
-                  </div>
-                  {expanded&&h.groups&&h.groups.length>0&&(
-                    <div style={{borderTop:"0.5px solid var(--mj-line)"}}>
-                      <div style={{padding:"8px 14px 2px",fontSize:10,color:"var(--mj-muted)",
-                        letterSpacing:1,textTransform:"uppercase"}}>Example hand</div>
-                      <HandDiagram groups={h.groups} accentColor={gameColor} tileSize={40}/>
-                      <div style={{height:12}}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
         )}
-
-        {/* ── RULES TAB — identical to host ── */}
-        {tab==="ref"&&(
-          <div>
-            <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,
-              textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
-            <div style={{background:`${gameColor}15`,border:`0.5px solid ${gameColor}40`,
-              borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:gameAccent,lineHeight:1.6}}>
-              📋 Points are additive — stack them all up.
-            </div>
-            {DXB_REF.map((sec,si)=>(
-              <div key={si} style={{marginBottom:16}}>
-                <div style={{fontSize:11,color:gameColor,letterSpacing:1.5,textTransform:"uppercase",
-                  fontWeight:700,marginBottom:8,padding:"4px 0"}}>{sec.section}</div>
-                {sec.items.map((item,ii)=>(
-                  <div key={ii} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                    padding:"8px 12px",background:ii%2===0?"#FFFFFF":"#F4F0E8",borderRadius:8,marginBottom:2}}>
-                    <span style={{fontSize:13,color:"var(--mj-muted)",flex:1,paddingRight:10}}>{item.name}</span>
-                    <span style={{fontSize:14,fontWeight:700,
-                      color:Number(item.pts)<0?"#E05050":gameAccent,flexShrink:0,minWidth:40,textAlign:"right"}}>
-                      {Number(item.pts)>0?"+":""}{item.pts}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
       </div>
+      <BottomNav tabs={tabs} active={tab} onChange={setTab}/>
     </div>
   );
 }
@@ -2982,7 +3088,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   const saved = freshStart ? null : loadState();
 
   const [activeGame, setActiveGame] = useState(GAMES[0]);
-  const [tab, setTab] = useState("table");
+  const [tab, setTab] = useState("track");
   const [players, setPlayers] = useState(saved?.players || playersFromRegulars());
   const [round, setRound] = useState(saved?.round || 1);
   const [roundWind, setRoundWind] = useState(saved?.roundWind || "E");
@@ -3087,9 +3193,10 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   };
 
   const tabs=[
-    {id:"table",label:"Table",icon:"🀄"},
-    {id:"hands",label:"Hands",icon:"📖"},
-    {id:"ref",label:"Rules",icon:"📋"},
+    {id:"track",label:"Track",icon:"track"},
+    {id:"score",label:"Score",icon:"score"},
+    {id:"hands",label:"Hands",icon:"hands"},
+    {id:"you",label:"You",icon:"you"},
   ];
 
   // ── PAYMENT CALCULATION ──────────────────────────────────────────────────────
@@ -3206,14 +3313,22 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     const entries = players.map(p => ({ pid: p.id, name: p.name, delta: Number(deltas[p.id] || 0) }));
     const windsBefore = Object.fromEntries(players.map(p => [p.id, p.windId]));
     const nextBank = extra.bankAfter !== undefined ? extra.bankAfter : bank;
-    setPlayers(players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) })));
+    const scored = players.map(p => ({ ...p, score: p.score + (deltas[p.id] || 0) }));
     setRoundHistory(h => [...h, {
       id: Date.now(), type, round, entries, windsBefore,
       roundWindBefore: roundWind, dealerStreakBefore: dealerStreak,
       bankBefore: bank, ...extra,
     }]);
     if (extra.bankAfter !== undefined) setBank(nextBank);
-    if (keepEast) setDealerStreak(s => s + 1);
+    if (bumpRound && !keepEast) {
+      const { rotatedPlayers, newRoundWind } = rotateDealerIfNeeded(null, scored);
+      setPlayers(rotatedPlayers);
+      setRoundWind(newRoundWind);
+      setDealerStreak(0);
+    } else {
+      setPlayers(scored);
+      if (keepEast) setDealerStreak(s => s + 1);
+    }
     if (bumpRound) setRound(r => r + 1);
     setTableAction(null);
     setActionDraft({});
@@ -3229,6 +3344,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
       extra: { ...ledger.extra, payments: ledger.payments },
     });
     setShowScoreSheet(false);
+    setTab("track");
   };
 
   const endNightAndReset = (goHome) => {
@@ -3306,66 +3422,57 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     } else {
       setPendingPayment(null);
     }
-    setTab("table");
+    setTab("track");
   };
 
   return (
     <div className="mj-page" style={{minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
 
-      {/* Header */}
-      <div style={{padding:"16px 20px 12px",background:"rgba(247,244,238,0.94)",backdropFilter:"saturate(180%) blur(16px)",borderBottom:"0.5px solid var(--mj-line)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div>
-            <div style={{fontSize:12,color:"var(--mj-muted)",letterSpacing:0.2,fontWeight:600}}>Mahjong</div>
-            <div style={{fontSize:28,fontWeight:800,color:"var(--mj-ink)",marginTop:2,letterSpacing:"-0.6px"}}>Round {round}</div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {isHost && room && (
-              <button
-                onClick={()=>{
-                  const share = () => {
-                    navigator.clipboard?.writeText(room.code);
-                    setShareNote("Code copied");
-                    setTimeout(()=>setShareNote(""), 1800);
-                  };
-                  if (navigator.share) {
-                    navigator.share({ title:"Join my Mahjong game", text:`Join my game with code: ${room.code}` }).catch(share);
-                  } else share();
-                }}
-                style={{background:`${game.color}20`,border:`1px solid ${game.color}50`,
-                  borderRadius:10,padding:"5px 10px",color:game.accent,
-                  fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:2}}>
-                {room.code}
-              </button>
-            )}
-            <div style={{background:`${game.color}18`,border:`1px solid ${game.color}40`,borderRadius:20,padding:"6px 12px",color:game.accent,fontSize:12,fontWeight:700}}>
-              Dubai Style
+      <AppTopBar
+        roundWind={roundWind}
+        round={round}
+        dealer={players.find(p => p.windId === "E")}
+        dealerStreak={dealerStreak}
+        bank={bank}
+        right={(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              {isHost && room && (
+                <button
+                  onClick={()=>{
+                    const share = () => {
+                      navigator.clipboard?.writeText(room.code);
+                      setShareNote("Code copied");
+                      setTimeout(()=>setShareNote(""), 1800);
+                    };
+                    if (navigator.share) {
+                      navigator.share({ title:"Join my Mahjong game", text:`Join my game with code: ${room.code}` }).catch(share);
+                    } else share();
+                  }}
+                  style={{background:`${game.color}20`,border:`1px solid ${game.color}50`,
+                    borderRadius:10,padding:"5px 10px",color:game.accent,
+                    fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:2}}>
+                  {room.code}
+                </button>
+              )}
+              {onLeaveRoom && (
+                <button onClick={onLeaveRoom}
+                  style={{background:"none",border:"0.5px solid var(--mj-line)",borderRadius:8,
+                    color:"var(--mj-muted)",fontSize:11,padding:"5px 10px",cursor:"pointer"}}>
+                  Home
+                </button>
+              )}
             </div>
-            {onLeaveRoom && (
-              <button onClick={onLeaveRoom}
-                style={{background:"none",border:"0.5px solid var(--mj-line)",borderRadius:8,
-                  color:"var(--mj-muted)",fontSize:11,padding:"5px 10px",cursor:"pointer"}}>
-                Home
-              </button>
-            )}
+            <div style={{fontSize:11,fontWeight:700,color:game.accent}}>Dubai</div>
           </div>
-        </div>
-        {shareNote && <div style={{marginTop:8,fontSize:11,color:game.accent}}>{shareNote}</div>}
-      </div>
+        )}
+      />
+      {shareNote && <div style={{padding:"8px 18px 0",fontSize:12,color:game.accent}}>{shareNote}</div>}
 
-      {/* Tab Bar */}
-      <div style={{display:"flex",background:"rgba(247,244,238,0.94)",borderBottom:"0.5px solid var(--mj-line)",position:"sticky",top:73,zIndex:40}}>
-        {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"11px 4px 10px",background:"none",border:"none",borderBottom:tab===t.id?`2.5px solid ${game.color}`:"2.5px solid transparent",color:tab===t.id?"var(--mj-ink)":"var(--mj-muted)",fontSize:11,fontWeight:700,letterSpacing:0.2,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"all 0.15s"}}>
-            <span style={{fontSize:16}}>{t.icon}</span>{t.label.toUpperCase()}
-          </button>
-        ))}
-      </div>
+      <div style={{padding:"16px 16px 108px"}}>
 
-      <div style={{padding:"16px 16px 100px"}}>
-
-        {/* ── TABLE ── */}
-        {tab==="table"&&(
+        {/* ── TRACK ── */}
+        {tab==="track"&&(
           <div>
 
             {/* ── GAME SETUP PANEL ── */}
@@ -3674,122 +3781,63 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
 
             {/* ── SCOREBOARD ── */}
             <div style={{marginBottom:16}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <div>
-                  <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase"}}>Scoreboard · Round {round}</div>
-                  {/* Proactive dealer + wind status */}
-                  <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap"}}>
-                    {(() => {
-                      const dealer = players.find(p=>p.windId==="E");
-                      const rw = WINDS.find(w=>w.id===roundWind);
-                      return <>
-                        <div style={{fontSize:11,color:"#7A4E0E",background:"rgba(245,201,122,0.12)",
-                          border:"0.5px solid rgba(245,201,122,0.3)",borderRadius:10,padding:"2px 8px",fontWeight:600}}>
-                          🎴 Dealer: {dealer?.name||"?"}
-                          {dealerStreak>0 ? ` · 連莊 ×${dealerStreak}` : ""}
-                        </div>
-                        <div style={{fontSize:11,color:game.color,background:`${game.color}12`,
-                          border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"2px 8px",fontWeight:600}}>
-                          {rw?.emoji} {rw?.label} Round
-                        </div>
-                        <div style={{fontSize:11,color:bank>0?"#8A5A12":"var(--mj-muted)",
-                          background:bank>0?"#FFF6E5":"rgba(255,255,255,0.04)",
-                          border:`0.5px solid ${bank>0?"rgba(183,121,31,0.35)":"var(--mj-line)"}`,
-                          borderRadius:10,padding:"2px 8px",fontWeight:700}}>
-                          Bank {bank}{bank>0 ? " · next self pick" : ""}
-                        </div>
-                      </>;
-                    })()}
-                  </div>
+                  <div className="mj-section-label" style={{marginBottom:4}}>The table</div>
+                  {bank > 0 && (
+                    <div style={{fontSize:12,fontWeight:700,color:"#8A5A12"}}>Bank {bank} · next self pick</div>
+                  )}
                 </div>
                 <button onClick={()=>setShowSetup(v=>!v)}
-                  style={{background:"none",border:"0.5px solid var(--mj-line)",borderRadius:8,
-                    color:"var(--mj-muted)",fontSize:11,padding:"4px 10px",cursor:"pointer",flexShrink:0}}>
-                  ⚙️ Setup
+                  style={{background:"#FFFFFF",border:"0.5px solid var(--mj-line)",borderRadius:10,
+                    color:"var(--mj-ink)",fontSize:12,fontWeight:650,padding:"6px 12px",cursor:"pointer"}}>
+                  Setup
                 </button>
               </div>
-              {sorted.map((p,i)=>{
-                const wInfo = windLabel(p.windId);
+              {[...players].sort((a,b)=>["E","S","W","N"].indexOf(a.windId)-["E","S","W","N"].indexOf(b.windId)).map((p)=>{
                 const isDealer = p.windId==="E";
                 const isRoundWind = p.windId===roundWind;
                 return (
-                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,
-                    background:isDealer?`${p.color}18`:"#FFFFFF",
-                    border:isDealer?`1.5px solid ${p.color}55`:"0.5px solid var(--mj-line)",
-                    borderRadius:18,padding:"14px 16px",marginBottom:10,
-                    boxShadow:"var(--mj-shadow)"}}>
-                    <div style={{width:30,height:30,borderRadius:"50%",background:p.color,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:13,fontWeight:700,color:"#0E0C0A",flexShrink:0}}>
-                      {i===0?"👑":i+1}
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                        {editingPlayer===p.id ? (
-                          <input autoFocus value={p.name}
-                            onChange={e=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}
-                            onBlur={()=>setEditingPlayer(null)}
-                            onKeyDown={e=>e.key==="Enter"&&setEditingPlayer(null)}
-                            style={{width:110,background:"transparent",border:"none",borderBottom:`1.5px solid ${p.color}`,
-                              color:"var(--mj-ink)",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit"}}/>
-                        ) : (
-                          <span onClick={()=>setEditingPlayer(p.id)}
-                            style={{fontSize:16,fontWeight:700,color:"var(--mj-ink)",
-                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120,cursor:"pointer"}}>
-                            {p.name}
-                          </span>
-                        )}
-                        <span style={{fontSize:11,color:p.color,background:`${p.color}20`,
-                          padding:"1px 6px",borderRadius:8,flexShrink:0}}>
-                          {wInfo?.emoji} {wInfo?.label}
-                        </span>
-                        {isDealer&&<span style={{fontSize:10,color:"#7A4E0E",background:"rgba(245,201,122,0.15)",
-                          padding:"1px 6px",borderRadius:6,fontWeight:700,flexShrink:0}}>
-                          {dealerStreak>0 ? `DEALER · 連莊 ×${dealerStreak}` : "DEALER"}
-                        </span>}
-                        {isRoundWind&&!isDealer&&<span style={{fontSize:10,color:game.color,
-                          background:`${game.color}15`,padding:"1px 6px",borderRadius:6,
-                          fontWeight:600,flexShrink:0}}>+1 wind</span>}
-                      </div>
-                    </div>
-                    <div style={{fontSize:28,fontWeight:800,letterSpacing:"-0.8px",
-                      color:p.score>0?"#2F7D4A":p.score<0?"#C23B3B":"var(--mj-muted)",
-                      flexShrink:0}}>
-                      {p.score>0?"+":""}{p.score}
-                    </div>
-                  </div>
+                  <TrackPlayerCard
+                    key={p.id}
+                    player={p}
+                    isDealer={isDealer}
+                    isRoundWind={isRoundWind}
+                    dealerStreak={dealerStreak}
+                    editing={editingPlayer===p.id}
+                    onEdit={()=>setEditingPlayer(p.id)}
+                    onNameChange={(name)=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,name}:x))}
+                    onNameBlur={()=>setEditingPlayer(null)}
+                  />
                 );
               })}
             </div>
 
             {pendingScore === null && pendingPayment === null && !showSetup && !tableAction && (
               <div style={{marginBottom:16}}>
-                <button onClick={()=>setShowScoreSheet(true)}
-                  style={{width:"100%",padding:16,background:game.color,border:"none",borderRadius:16,
-                    color:"#fff",fontSize:17,fontWeight:700,cursor:"pointer",letterSpacing:"-0.2px"}}>
-                  Score this hand
-                </button>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
+                <div className="mj-cta-row">
+                  <button className="mj-cta" onClick={()=>{ setTableAction(null); setActionDraft({}); setTab("score"); }}>Record win</button>
+                  <button className="mj-cta-secondary" onClick={()=>{setTableAction("draw");setActionDraft({});}}>Draw</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
                   {[
-                    {id:"draw", label:"Draw / wall out", sub:`Each −${DXB_SCORE.draw_bank} · Bank`},
-                    {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
-                    {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
-                    {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
+                    {id:"false_mj", label:"False MJ"},
+                    {id:"chase", label:"Chasing"},
+                    {id:"gong", label:"Gong"},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
-                      style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
-                        borderRadius:14,cursor:"pointer",textAlign:"left",boxShadow:"var(--mj-shadow)"}}>
-                      <div style={{fontSize:14,fontWeight:700,color:"var(--mj-ink)"}}>{a.label}</div>
-                      <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:3}}>{a.sub}</div>
+                      style={{padding:"10px 8px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
+                        borderRadius:12,cursor:"pointer",fontSize:13,fontWeight:700,color:"var(--mj-ink)"}}>
+                      {a.label}
                     </button>
                   ))}
                 </div>
-                <div style={{display:"flex",gap:10,marginTop:10}}>
+                <div style={{display:"flex",gap:10}}>
                   {roundHistory.length>0 && (
                     <button onClick={undoLastHand}
                       style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(220,80,80,0.35)",
-                        borderRadius:10,color:"#E05050",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                      Undo last
+                        borderRadius:10,color:"#C23B3B",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                      Undo
                     </button>
                   )}
                   <button onClick={()=>setShowAdjust(v=>!v)}
@@ -3800,7 +3848,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   <button onClick={()=>setTableAction("settle")}
                     style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(183,121,31,0.35)",
                       borderRadius:12,color:"#8A5A12",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                    End night
+                    Finish
                   </button>
                 </div>
               </div>
@@ -3938,129 +3986,12 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
               </button>
             </div>}
 
-            {/* ── ROUND HISTORY ── */}
-            {roundHistory.length>0&&(
-              <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase"}}>
-                    History · {roundHistory.length} round{roundHistory.length!==1?"s":""}
-                  </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <span style={{fontSize:10,color:"var(--mj-muted)",alignSelf:"center"}}>💾 auto-saved</span>
-                    <button onClick={resetScores} style={{background:"none",border:"0.5px solid rgba(220,80,80,0.4)",borderRadius:8,color:"#E05050",fontSize:11,padding:"3px 10px",cursor:"pointer"}}>Reset scores</button>
-                    <button onClick={fullReset} style={{background:"none",border:"0.5px solid rgba(220,80,80,0.4)",borderRadius:8,color:"#E05050",fontSize:11,padding:"3px 10px",cursor:"pointer"}}>New game</button>
-                  </div>
-                </div>
-                {[...roundHistory].reverse().map((r,i)=>{
-                  const winner = players.find(p=>p.id===r.winnerId);
-                  const title = historyLabel(r);
-                  return (
-                  <div key={r.id || `${r.type||"h"}-${r.round}-${i}`} style={{background:"#131109",borderRadius:10,border:"0.5px solid var(--mj-line)",padding:"10px 14px",marginBottom:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                      <div style={{fontSize:11,color:"var(--mj-muted)"}}>Round {r.round} · {title}</div>
-                      {winner&&<div style={{fontSize:11,color:game.accent,fontWeight:600}}>🏆 {winner.name}</div>}
-                    </div>
-                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                      {r.entries.map(e=><span key={e.pid} style={{fontSize:13,
-                        color:e.delta>0?"#8FBC8F":e.delta<0?"#E05050":"var(--mj-muted)"}}>
-                        {e.name}: {e.delta>0?"+":""}{e.delta}
-                      </span>)}
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            )}
+            <HandHistoryList history={roundHistory} players={players} accent={game.accent}/>
           </div>
         )}
 
-
-        {/* ── HANDS ── */}
-        {tab==="hands"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase"}}>{game.name} · {allHands.length} hands</div>
-            </div>
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:14,scrollbarWidth:"none"}}>
-              {cats.map(f=>(
-                <button key={f.id} onClick={()=>{setHandFilter(f.id);setExpandedHand(null);}} style={{flexShrink:0,padding:"5px 12px",borderRadius:20,background:handFilter===f.id?game.color:"transparent",border:`0.5px solid ${handFilter===f.id?game.color:"var(--mj-line)"}`,color:handFilter===f.id?"#0E0C0A":"var(--mj-muted)",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            {filteredHands.map((h,i)=>{
-              const expanded=expandedHand===i;
-              const val=h.pts??h.faan??h.tai;
-              const lim=String(val||"").toLowerCase().includes("limit")||Number(val)>=40;
-              return (
-                <div key={i} style={{background:"#FFFFFF",border:`0.5px solid ${lim?game.color+"60":"var(--mj-line)"}`,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
-                  <div onClick={()=>setExpandedHand(expanded?null:i)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"13px 14px",cursor:"pointer"}}>
-                    <div style={{flex:1,marginRight:10}}>
-                      <div style={{fontSize:14,fontWeight:600,color:"var(--mj-ink)"}}>{h.name}</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                      <div style={{background:lim?`${game.color}30`:"#F4F0E8",border:`0.5px solid ${lim?game.color:"var(--mj-line)"}`,borderRadius:8,padding:"4px 12px",minWidth:40,textAlign:"center"}}>
-                        <div style={{fontSize:14,fontWeight:700,color:game.accent}}>{val}{isDXB&&typeof val==="number"?" pts":""}</div>
-                      </div>
-                      <span style={{fontSize:14,color:"var(--mj-muted)"}}>{expanded?"▲":"▼"}</span>
-                    </div>
-                  </div>
-                  <div style={{padding:"0 14px 10px",fontSize:12,color:"var(--mj-muted)",lineHeight:1.5}}>{h.desc}</div>
-                  {expanded&&h.groups&&h.groups.length>0&&(
-                    <div style={{borderTop:"0.5px solid var(--mj-line)"}}>
-                      <div style={{padding:"8px 14px 2px",fontSize:10,color:"var(--mj-muted)",letterSpacing:1,textTransform:"uppercase"}}>Example hand</div>
-                      <HandDiagram groups={h.groups} accentColor={game.color} tileSize={40}/>
-                      <div style={{height:12}}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {filteredHands.length===0&&<div style={{textAlign:"center",padding:40,color:"var(--mj-muted)"}}>No hands for this filter.</div>}
-          </div>
-        )}
-
-        {/* ── DUBAI RULES REFERENCE ── */}
-        {tab==="ref"&&(
-          <div>
-            <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:14}}>Dubai 2025 Complete Scoring Reference</div>
-            <div style={{background:`${game.color}15`,border:`0.5px solid ${game.color}40`,borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:game.accent,lineHeight:1.6}}>
-              📋 From Anetum’s Taiwanese Mahjong Classes sheet (Dubai table). Points add up. Draw pays 5 each into the Bank; the next Self Pick takes the Bank.
-            </div>
-            {DXB_REF.map((sec,si)=>(
-              <div key={si} style={{marginBottom:16}}>
-                <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700,marginBottom:8,padding:"4px 0"}}>{sec.section}</div>
-                {sec.items.map((item,ii)=>(
-                  <div key={ii} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:ii%2===0?"#FFFFFF":"#F4F0E8",borderRadius:8,marginBottom:2}}>
-                    <span style={{fontSize:13,color:"var(--mj-muted)",flex:1,paddingRight:10}}>{item.name}</span>
-                    <span style={{fontSize:14,fontWeight:700,color:Number(item.pts)<0?"#E05050":game.accent,flexShrink:0,minWidth:40,textAlign:"right"}}>{Number(item.pts)>0?"+":""}{item.pts}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
-      </div>
-
-      {showScoreSheet && (
-        <div style={{position:"fixed",inset:0,zIndex:80,background:"var(--mj-bg)",maxWidth:480,margin:"0 auto",
-          display:"flex",flexDirection:"column"}}>
-          <div style={{padding:"14px 16px 12px",borderBottom:"0.5px solid rgba(200,146,58,0.2)",
-            display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-            <div>
-              <div style={{fontSize:11,color:game.color,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>
-                {tableAction && tableAction !== "settle" ? tableExceptionMeta(tableAction).title : "Score this hand"}
-              </div>
-              <div style={{fontSize:14,color:"var(--mj-muted)",marginTop:2}}>Round {round}</div>
-            </div>
-            <button onClick={()=>{ setShowScoreSheet(false); setTableAction(null); setActionDraft({}); }}
-              style={{background:"none",border:"0.5px solid var(--mj-line)",borderRadius:8,
-                color:"var(--mj-ink)",fontSize:13,fontWeight:600,padding:"6px 12px",cursor:"pointer"}}>
-              Close
-            </button>
-          </div>
-          <div ref={sheetScrollRef} style={{flex:1,overflowY:"auto",padding:"16px 16px 40px"}}>
+        {tab==="score"&&(
+          <div ref={sheetScrollRef}>
             {tableAction && tableAction !== "settle" ? (
               <TableExceptionPanel
                 type={tableAction}
@@ -4078,15 +4009,85 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 onScore={handleWizardScore}
                 players={players}
                 roundWind={roundWind}
-                onTableAction={(id) => {
-                  setTableAction(id);
-                  setActionDraft({});
-                }}
               />
             )}
           </div>
-        </div>
-      )}
+        )}
+
+        {tab==="hands"&&(
+          <WikiPanel
+            game={game}
+            allHands={allHands}
+            cats={cats}
+            filteredHands={filteredHands}
+            handFilter={handFilter}
+            setHandFilter={setHandFilter}
+            expandedHand={expandedHand}
+            setExpandedHand={setExpandedHand}
+            isDXB={isDXB}
+          />
+        )}
+
+        {tab==="you"&&(
+          <div>
+            <div className="mj-title" style={{fontSize:24,marginBottom:4}}>You</div>
+            <div className="mj-meta" style={{marginBottom:16}}>This night, then every night on this phone.</div>
+            <div className="mj-card" style={{padding:16,marginBottom:14}}>
+              <div className="mj-section-label">Tonight</div>
+              {[...players].sort((a,b)=>b.score-a.score).map(p=>(
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0"}}>
+                  <span style={{fontSize:14,color:"var(--mj-ink)",fontWeight:600}}>{p.name}</span>
+                  <span style={{fontSize:14,fontWeight:800,color:p.score>0?"#2F7D4A":p.score<0?"#C23B3B":"var(--mj-muted)"}}>
+                    {p.score>0?"+":""}{p.score}
+                  </span>
+                </div>
+              ))}
+              <div style={{fontSize:12,color:"var(--mj-muted)",marginTop:8}}>
+                {roundHistory.length} hand{roundHistory.length!==1?"s":""}
+                {bank>0 ? ` · Bank ${bank}` : ""}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:18}}>
+              <button onClick={()=>{ setTableAction("settle"); setTab("track"); }}
+                style={{flex:1,padding:12,background:"var(--mj-ink)",border:"none",borderRadius:12,
+                  color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                Finish
+              </button>
+              <button onClick={fullReset}
+                style={{flex:1,padding:12,background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
+                  borderRadius:12,color:"var(--mj-ink)",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                New game
+              </button>
+              {onLeaveRoom && (
+                <button onClick={onLeaveRoom}
+                  style={{flex:1,padding:12,background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
+                    borderRadius:12,color:"var(--mj-muted)",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  Home
+                </button>
+              )}
+            </div>
+            {roundHistory.length>0 && (
+              <div style={{display:"flex",gap:8,marginBottom:18}}>
+                <button onClick={undoLastHand}
+                  style={{flex:1,padding:10,background:"none",border:"0.5px solid rgba(194,59,59,0.35)",
+                    borderRadius:10,color:"#C23B3B",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  Undo last
+                </button>
+                <button onClick={resetScores}
+                  style={{flex:1,padding:10,background:"none",border:"0.5px solid var(--mj-line)",
+                    borderRadius:10,color:"var(--mj-muted)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  Reset scores
+                </button>
+              </div>
+            )}
+            <div className="mj-section-label">Past nights</div>
+            <PastNightsList/>
+          </div>
+        )}
+
+      </div>
+
+      <BottomNav tabs={tabs} active={tab} onChange={setTab}/>
     </div>
   );
 }
