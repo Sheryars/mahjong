@@ -336,6 +336,9 @@ const DXB_SCORE = {
   concealed_pong_5: 80, concealed_pong_5_self_no_gong: 100,
   open_gong: 1, concealed_gong: 2,
   concealed_gong_collect: 5,
+  // Quick-action flower collect (house rule): flat points from EACH other player (not per flower)
+  flower_collect_same_color: 10,
+  flower_collect_mixed: 5,
   four_in_2: 5, four_in_3: 15, four_in_4: 20,
   no_terminals: 5, no_terminals_no_honours: 5,
   all_terminals_with_honours: 20, all_terminals_no_honours: 40,
@@ -2206,9 +2209,14 @@ function rememberPlayers(players) {
   const prev = loadRegulars();
   saveRegulars([...incoming, ...prev.filter(n => !incoming.includes(n))]);
 }
-function playersFromRegulars() {
+function playersFromRegulars(count = 4) {
   const names = loadRegulars();
-  return DEFAULT_PLAYERS.map((p, i) => ({ ...p, name: names[i] || p.name }));
+  const n = count === 3 ? 3 : 4;
+  return DEFAULT_PLAYERS.slice(0, n).map((p, i) => ({
+    ...p,
+    name: names[i] || p.name,
+    windId: WINDS[i].id,
+  }));
 }
 
 function loadArchive() {
@@ -2280,6 +2288,9 @@ function historyLabel(r) {
   if (r.type === "false_mj") return "False Mahjong";
   if (r.type === "chase") return r.chaseKind === "suit" ? "Chasing suit" : "Chasing wind/dragon";
   if (r.type === "gong") return "Concealed Gong";
+  if (r.type === "flower") {
+    return r.flowerKind === "same" ? "Flowers · same colour" : "Flowers · mixed";
+  }
   if (r.type === "adjust") return "Manual adjust";
   if (r.winnerIds?.length > 1) return `Win · ${r.winnerIds.length} winners`;
   if (r.winnerId) return "Win";
@@ -2618,7 +2629,7 @@ function tableExceptionMeta(type) {
   };
   if (type === "false_mj") return {
     title: "False Mahjong",
-    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts to each of the other three. The hand ends and the dealer stays.`,
+    blurb: `Who called it? They pay ${DXB_SCORE.false_mahjong} pts to each of the other players. The hand ends and the dealer stays.`,
     confirm: `Confirm −${DXB_SCORE.false_mahjong} each · dealer stays`,
   };
   if (type === "chase") return {
@@ -2628,8 +2639,13 @@ function tableExceptionMeta(type) {
   };
   if (type === "gong") return {
     title: "Collect concealed Gong",
-    blurb: `Concealed Gong collects ${DXB_SCORE.concealed_gong_collect} pts from each of the other three, immediately. Open Gong waits until the winning hand.`,
+    blurb: `Concealed Gong collects ${DXB_SCORE.concealed_gong_collect} pts from each of the other players, immediately. Open Gong waits until the winning hand.`,
     confirm: `Confirm collect ${DXB_SCORE.concealed_gong_collect} from each`,
+  };
+  if (type === "flower") return {
+    title: "Collect Flowers",
+    blurb: `Flower bonus collected from each other player, immediately. Same-colour flowers = ${DXB_SCORE.flower_collect_same_color} pts from each player, mixed flowers = ${DXB_SCORE.flower_collect_mixed} pts from each player.`,
+    confirm: "Confirm flower collect",
   };
   return { title: "Table action", blurb: "", confirm: "Confirm" };
 }
@@ -2685,6 +2701,23 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
       }
     });
     return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { gongerId: who } };
+  }
+  if (type === "flower") {
+    const who = draft.whoId;
+    const kind = draft.flowerKind; // "same" | "mixed"
+    if (!who || !kind) return empty;
+    // Flat bonus from EACH other player (not multiplied by flower count)
+    const amt = kind === "same" ? DXB_SCORE.flower_collect_same_color : DXB_SCORE.flower_collect_mixed;
+    const deltas = {};
+    const payments = [];
+    players.forEach(p => {
+      if (p.id === who) deltas[p.id] = amt * (players.length - 1);
+      else {
+        deltas[p.id] = -amt;
+        payments.push({ fromId: p.id, toId: who, amount: amt });
+      }
+    });
+    return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { flowerHolderId: who, flowerKind: kind, perPlayer: amt } };
   }
   return empty;
 }
@@ -2802,6 +2835,30 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
         <>
           <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who declared it</div>
           <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+        </>
+      )}
+
+      {type === "flower" && (
+        <>
+          <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who has the flowers</div>
+          <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+
+          <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Flower type</div>
+          <div style={{display:"flex",gap:8}}>
+            {[
+              {id:"same", label:`Same colour · +${DXB_SCORE.flower_collect_same_color} per player`},
+              {id:"mixed", label:`Mixed · +${DXB_SCORE.flower_collect_mixed} per player`},
+            ].map(k=>(
+              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id}))}
+                style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
+                  border:`1.5px solid ${draft.flowerKind===k.id?game.color:"var(--mj-line)"}`,
+                  background:draft.flowerKind===k.id?`${game.color}20`:"transparent",
+                  color:draft.flowerKind===k.id?game.accent:"var(--mj-muted)",
+                  fontSize:12,fontWeight:700}}>
+                {k.label}
+              </button>
+            ))}
+          </div>
         </>
       )}
 
@@ -3419,9 +3476,29 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setScoreInputs({});
   };
 
+  const setPlayerCount = (n) => {
+    const target = n === 3 ? 3 : 4;
+    setPlayers(prev => {
+      if (prev.length === target) return prev;
+      const names = loadRegulars();
+      let next;
+      if (target < prev.length) {
+        next = prev.slice(0, target);
+      } else {
+        next = [...prev];
+        for (let i = prev.length; i < target; i++) {
+          const d = DEFAULT_PLAYERS[i];
+          next.push({ ...d, name: names[i] || d.name, score: 0 });
+        }
+      }
+      return next.map((p, i) => ({ ...p, windId: WINDS[i].id }));
+    });
+    setRoundWind(rw => (WINDS.slice(0, target).some(w => w.id === rw) ? rw : "E"));
+  };
+
   const fullReset = () => {
     if (!window.confirm("Start a new game? This clears names, seats, and scores.")) return;
-    setPlayers(playersFromRegulars());
+    setPlayers(playersFromRegulars(players.length));
     setRoundHistory([]);
     setRound(1);
     setRoundWind("E");
@@ -3485,36 +3562,25 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   // ── DEALER ROTATION ───────────────────────────────────────────────────────────
   // After each round:
   // - If East (dealer) WON → East keeps the deal (no rotation)
-  // - If East did NOT win → deal passes to next seat (E→S→W→N→E)
-  // Round wind advances one full rotation through all four players.
-  const WIND_ORDER = ["E","S","W","N"];
+  // - If East did NOT win → deal passes to next seat (3p: E→S→W→E · 4p: E→S→W→N→E)
+  // Round wind advances after one full deal rotation through all seats.
+  const WIND_ORDER = WINDS.slice(0, players.length).map(w => w.id);
+  const SEAT_COUNT = WIND_ORDER.length;
 
   const rotateDealerIfNeeded = (winnerId, newPlayers) => {
     const winnerIds = Array.isArray(winnerId) ? winnerId : (winnerId ? [winnerId] : []);
     const eastWon = winnerIds.some(id => newPlayers.find(p => p.id === id)?.windId === "E");
     if (eastWon) return { rotatedPlayers: newPlayers, newRoundWind: roundWind };
 
-    // Rotate all seats: E→N, S→E, W→S, N→W (anti-clockwise shift)
     const rotated = newPlayers.map(p => {
       const idx = WIND_ORDER.indexOf(p.windId);
-      const nextWind = WIND_ORDER[(idx - 1 + 4) % 4];
+      const nextWind = WIND_ORDER[(idx - 1 + SEAT_COUNT) % SEAT_COUNT];
       return { ...p, windId: nextWind };
     });
 
-    // Check if we've completed a full round (new East was previously North)
-    // i.e. the player who just became East was North before rotation
-    const newEast = rotated.find(p => p.windId === "E");
-    const origWind = newPlayers.find(p => p.id === newEast?.id)?.windId;
-    
-    // Advance round wind when we complete a full cycle (East returns to original East)
-    const originalEast = players.find(p => p.windId === "E");
-    const newEastIsOriginal = newEast?.id === originalEast?.id;
-    // Actually: advance round wind when the ORIGINAL East seat player gets deal back
-    // For simplicity: advance round wind after 4 rotations (track via round number)
     const windIdx = WIND_ORDER.indexOf(roundWind);
-    // Advance round wind every 4 rounds (one full deal rotation)
-    const newRoundWind = round % 4 === 0
-      ? WIND_ORDER[(windIdx + 1) % 4]
+    const newRoundWind = round % SEAT_COUNT === 0
+      ? WIND_ORDER[(windIdx + 1) % SEAT_COUNT]
       : roundWind;
 
     return { rotatedPlayers: rotated, newRoundWind };
@@ -3663,7 +3729,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     if (last.roundWindBefore) setRoundWind(last.roundWindBefore);
     if (last.dealerStreakBefore !== undefined) setDealerStreak(last.dealerStreakBefore);
     if (last.bankBefore !== undefined) setBank(last.bankBefore);
-    const midHand = last.type === "gong" || last.type === "chase";
+    const midHand = last.type === "gong" || last.type === "chase" || last.type === "flower";
     if (!midHand) setRound(last.round || Math.max(1, round - 1));
     setRoundHistory(h => h.slice(0, -1));
     setPendingPayment(null);
@@ -3767,6 +3833,21 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 </div>
                 <div style={{fontSize:12,color:"var(--mj-muted)",marginBottom:16}}>Enter names and assign wind seats</div>
 
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Players</div>
+                  <div style={{display:"flex",gap:8}}>
+                    {[3,4].map(n=>(
+                      <button key={n} type="button" onClick={()=>setPlayerCount(n)}
+                        style={{flex:1,padding:"10px 4px",borderRadius:10,
+                          border:`1.5px solid ${players.length===n?game.color:"var(--mj-line)"}`,
+                          background:players.length===n?`${game.color}25`:"transparent",cursor:"pointer",
+                          color:players.length===n?game.accent:"var(--mj-muted)",fontSize:14,fontWeight:700}}>
+                        {n} players
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {regulars.length > 0 && (
                   <div style={{marginBottom:14}}>
                     <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Saved regulars</div>
@@ -3816,7 +3897,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                       </div>
                       {/* Wind seat picker */}
                       <div style={{display:"flex",gap:5}}>
-                        {WINDS.map(w=>(
+                        {WINDS.slice(0, players.length).map(w=>(
                           <button key={w.id} onClick={()=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,windId:w.id}:x))}
                             style={{flex:1,padding:"7px 2px",borderRadius:8,
                               border:`1.5px solid ${p.windId===w.id?p.color:"var(--mj-line)"}`,
@@ -3837,7 +3918,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 <div style={{paddingTop:12,borderTop:"0.5px solid var(--mj-line)"}}>
                   <div style={{fontSize:11,color:"var(--mj-muted)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Prevailing (Round) Wind</div>
                   <div style={{display:"flex",gap:6}}>
-                    {WINDS.map(w=>(
+                    {WINDS.slice(0, players.length).map(w=>(
                       <button key={w.id} onClick={()=>setRoundWind(w.id)}
                         style={{flex:1,padding:"8px 4px",borderRadius:8,
                           border:`1.5px solid ${roundWind===w.id?game.color:"var(--mj-line)"}`,
@@ -4135,11 +4216,12 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                   <button className="mj-cta" onClick={()=>{ setTableAction(null); setActionDraft({}); setTab("score"); }}>Record win</button>
                   <button className="mj-cta-secondary" onClick={()=>{setTableAction("draw");setActionDraft({});}}>Draw</button>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                   {[
                     {id:"false_mj", label:"False MJ"},
                     {id:"chase", label:"Chasing"},
                     {id:"gong", label:"Gong"},
+                    {id:"flower", label:"Flowers"},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
                       style={{padding:"10px 8px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
