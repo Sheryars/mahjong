@@ -302,7 +302,7 @@ const DXB_SCORE = {
   pure_bouquet: 10,
   seven_flowers: 20,
   eight_flowers: 40,
-  // Quick-action flower collect (house rule): points per flower, collected from each other player
+  // Quick-action flower collect (house rule): flat points collected from EACH other player (not per flower)
   flower_collect_same_color: 10,
   flower_collect_mixed: 5,
   no_flowers: 1,
@@ -1454,7 +1454,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
               {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
               {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
               {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
-              {id:"flower", label:"Collect Flowers", sub:`Same ${DXB_SCORE.flower_collect_same_color} / mixed ${DXB_SCORE.flower_collect_mixed} each`},
+              {id:"flower", label:"Collect Flowers", sub:`Same ${DXB_SCORE.flower_collect_same_color} / mixed ${DXB_SCORE.flower_collect_mixed} per player`},
             ].map(a=>(
               <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
                 style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
@@ -2028,7 +2028,7 @@ function tableExceptionMeta(type) {
   };
   if (type === "flower") return {
     title: "Collect Flowers",
-    blurb: `Flower bonus collected from each other player, immediately. Same-colour flowers = ${DXB_SCORE.flower_collect_same_color} pts each, mixed flowers = ${DXB_SCORE.flower_collect_mixed} pts each.`,
+    blurb: `Flower bonus collected from each other player, immediately. Same-colour flowers = ${DXB_SCORE.flower_collect_same_color} pts from each player, mixed flowers = ${DXB_SCORE.flower_collect_mixed} pts from each player.`,
     confirm: "Confirm flower collect",
   };
   return { title: "Table action", blurb: "", confirm: "Confirm" };
@@ -2095,10 +2095,9 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
   if (type === "flower") {
     const who = draft.whoId;
     const kind = draft.flowerKind; // "same" | "mixed"
-    const count = Number(draft.flowerCount || 0);
-    if (!who || !kind || count < 1) return empty;
-    const per = kind === "same" ? DXB_SCORE.flower_collect_same_color : DXB_SCORE.flower_collect_mixed;
-    const amt = per * count;
+    if (!who || !kind) return empty;
+    // Flat bonus collected from EACH other player (not multiplied by flower count)
+    const amt = kind === "same" ? DXB_SCORE.flower_collect_same_color : DXB_SCORE.flower_collect_mixed;
     const deltas = {};
     const payments = [];
     players.forEach(p => {
@@ -2108,7 +2107,7 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
         payments.push({ fromId: p.id, toId: who, amount: amt });
       }
     });
-    return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { flowerHolderId: who, flowerKind: kind, flowerCount: count, perFlower: per } };
+    return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { flowerHolderId: who, flowerKind: kind, perPlayer: amt } };
   }
   return empty;
 }
@@ -2230,10 +2229,10 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
           <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Flower type</div>
           <div style={{display:"flex",gap:8}}>
             {[
-              {id:"same", label:`Same colour · +${DXB_SCORE.flower_collect_same_color} each`},
-              {id:"mixed", label:`Mixed · +${DXB_SCORE.flower_collect_mixed} each`},
+              {id:"same", label:`Same colour · +${DXB_SCORE.flower_collect_same_color} per player`},
+              {id:"mixed", label:`Mixed · +${DXB_SCORE.flower_collect_mixed} per player`},
             ].map(k=>(
-              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id,flowerCount:k.id==="same"?Math.min(4,Number(d.flowerCount||1)):Number(d.flowerCount||1)}))}
+              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id}))}
                 style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
                   border:`1.5px solid ${draft.flowerKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
                   background:draft.flowerKind===k.id?`${game.color}20`:"transparent",
@@ -2243,27 +2242,6 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
               </button>
             ))}
           </div>
-
-          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>How many flowers</div>
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
-            <button type="button" onClick={()=>setDraft(d=>({...d,flowerCount:Math.max(1,Number(d.flowerCount||1)-1)}))}
-              style={{width:44,height:44,borderRadius:12,border:"1.5px solid rgba(255,255,255,0.12)",
-                background:"transparent",color:"#F0E8DC",fontSize:22,fontWeight:700,cursor:"pointer"}}>−</button>
-            <div style={{minWidth:40,textAlign:"center",fontSize:26,fontWeight:900,color:game.accent}}>{Number(draft.flowerCount||1)}</div>
-            <button type="button" onClick={()=>setDraft(d=>({...d,flowerCount:Math.min(d.flowerKind==="same"?4:8,Number(d.flowerCount||1)+1)}))}
-              style={{width:44,height:44,borderRadius:12,border:"1.5px solid rgba(255,255,255,0.12)",
-                background:"transparent",color:"#F0E8DC",fontSize:22,fontWeight:700,cursor:"pointer"}}>+</button>
-            {draft.flowerKind && (
-              <div style={{marginLeft:"auto",fontSize:12,color:"rgba(200,180,160,0.6)",textAlign:"right"}}>
-                {(draft.flowerKind==="same"?DXB_SCORE.flower_collect_same_color:DXB_SCORE.flower_collect_mixed) * Number(draft.flowerCount||1)} pts<br/>from each player
-              </div>
-            )}
-          </div>
-          {draft.flowerKind==="same" && (
-            <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginTop:8,lineHeight:1.5}}>
-              Same colour maxes at 4 tiles — 5 or more flowers are mixed (+{DXB_SCORE.flower_collect_mixed} each).
-            </div>
-          )}
         </>
       )}
 
@@ -3815,7 +3793,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
                     {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
                     {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
-                    {id:"flower", label:"Collect Flowers", sub:`Same +${DXB_SCORE.flower_collect_same_color} / mixed +${DXB_SCORE.flower_collect_mixed} each`},
+                    {id:"flower", label:"Collect Flowers", sub:`Same +${DXB_SCORE.flower_collect_same_color} / mixed +${DXB_SCORE.flower_collect_mixed} per player`},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
                       style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
