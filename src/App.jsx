@@ -302,6 +302,9 @@ const DXB_SCORE = {
   pure_bouquet: 10,
   seven_flowers: 20,
   eight_flowers: 40,
+  // Quick-action flower collect (house rule): flat points collected from EACH other player (not per flower)
+  flower_collect_same_color: 10,
+  flower_collect_mixed: 5,
   no_flowers: 1,
   no_honours: 1,
   no_flowers_no_honours: 5,
@@ -1451,6 +1454,7 @@ function DxbCameraTab({ game, onScore, players = [], roundWind = "E", onTableAct
               {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
               {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
               {id:"gong", label:"Collect Gong", sub:`${DXB_SCORE.concealed_gong_collect} from each`},
+              {id:"flower", label:"Collect Flowers", sub:`Same ${DXB_SCORE.flower_collect_same_color} / mixed ${DXB_SCORE.flower_collect_mixed} per player`},
             ].map(a=>(
               <button key={a.id} type="button" onClick={()=>onTableAction(a.id)}
                 style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
@@ -1908,9 +1912,14 @@ function rememberPlayers(players) {
   const prev = loadRegulars();
   saveRegulars([...incoming, ...prev.filter(n => !incoming.includes(n))]);
 }
-function playersFromRegulars() {
+function playersFromRegulars(count = 4) {
   const names = loadRegulars();
-  return DEFAULT_PLAYERS.map((p, i) => ({ ...p, name: names[i] || p.name }));
+  const n = count === 3 ? 3 : 4;
+  return DEFAULT_PLAYERS.slice(0, n).map((p, i) => ({
+    ...p,
+    name: names[i] || p.name,
+    windId: WINDS[i].id,
+  }));
 }
 
 function loadArchive() {
@@ -2017,6 +2026,11 @@ function tableExceptionMeta(type) {
     blurb: `Concealed Gong collects ${DXB_SCORE.concealed_gong_collect} pts from each of the other three, immediately. Open Gong waits until the winning hand.`,
     confirm: `Confirm collect ${DXB_SCORE.concealed_gong_collect} from each`,
   };
+  if (type === "flower") return {
+    title: "Collect Flowers",
+    blurb: `Flower bonus collected from each other player, immediately. Same-colour flowers = ${DXB_SCORE.flower_collect_same_color} pts from each player, mixed flowers = ${DXB_SCORE.flower_collect_mixed} pts from each player.`,
+    confirm: "Confirm flower collect",
+  };
   return { title: "Table action", blurb: "", confirm: "Confirm" };
 }
 
@@ -2077,6 +2091,23 @@ function buildExceptionLedger(type, draft, players, bank = 0) {
       }
     });
     return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { gongerId: who } };
+  }
+  if (type === "flower") {
+    const who = draft.whoId;
+    const kind = draft.flowerKind; // "same" | "mixed"
+    if (!who || !kind) return empty;
+    // Flat bonus collected from EACH other player (not multiplied by flower count)
+    const amt = kind === "same" ? DXB_SCORE.flower_collect_same_color : DXB_SCORE.flower_collect_mixed;
+    const deltas = {};
+    const payments = [];
+    players.forEach(p => {
+      if (p.id === who) deltas[p.id] = amt * (players.length - 1);
+      else {
+        deltas[p.id] = -amt;
+        payments.push({ fromId: p.id, toId: who, amount: amt });
+      }
+    });
+    return { ready: true, type, deltas, payments, bumpRound: false, keepEast: false, extra: { flowerHolderId: who, flowerKind: kind, perPlayer: amt } };
   }
   return empty;
 }
@@ -2187,6 +2218,30 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
         <>
           <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who declared it</div>
           <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+        </>
+      )}
+
+      {type === "flower" && (
+        <>
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:7}}>Who has the flowers</div>
+          <PlayerPickRow players={players} selectedId={draft.whoId} onPick={id=>setDraft(d=>({...d,whoId:id}))}/>
+
+          <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",margin:"12px 0 7px"}}>Flower type</div>
+          <div style={{display:"flex",gap:8}}>
+            {[
+              {id:"same", label:`Same colour · +${DXB_SCORE.flower_collect_same_color} per player`},
+              {id:"mixed", label:`Mixed · +${DXB_SCORE.flower_collect_mixed} per player`},
+            ].map(k=>(
+              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id}))}
+                style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
+                  border:`1.5px solid ${draft.flowerKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
+                  background:draft.flowerKind===k.id?`${game.color}20`:"transparent",
+                  color:draft.flowerKind===k.id?game.accent:"rgba(200,180,160,0.7)",
+                  fontSize:12,fontWeight:700}}>
+                {k.label}
+              </button>
+            ))}
+          </div>
         </>
       )}
 
@@ -2996,6 +3051,26 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     setScoreInputs({});
   };
 
+  const setPlayerCount = (n) => {
+    const target = n === 3 ? 3 : 4;
+    setPlayers(prev => {
+      if (prev.length === target) return prev;
+      const names = loadRegulars();
+      let next;
+      if (target < prev.length) {
+        next = prev.slice(0, target);
+      } else {
+        next = [...prev];
+        for (let i = prev.length; i < target; i++) {
+          const d = DEFAULT_PLAYERS[i];
+          next.push({ ...d, name: names[i] || d.name, score: 0 });
+        }
+      }
+      return next.map((p, i) => ({ ...p, windId: WINDS[i].id }));
+    });
+    setRoundWind(rw => (WINDS.slice(0, target).some(w => w.id === rw) ? rw : "E"));
+  };
+
   const fullReset = () => {
     if (!window.confirm("Start a new game? This clears names, seats, and scores.")) return;
     setPlayers(playersFromRegulars());
@@ -3065,7 +3140,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
   // - If East (dealer) WON → East keeps the deal (no rotation)
   // - If East did NOT win → deal passes to next seat (E→S→W→N→E)
   // Round wind advances one full rotation through all four players.
-  const WIND_ORDER = ["E","S","W","N"];
+  // Seats in play depend on the player count (3 → E/S/W, 4 → E/S/W/N)
+  const WIND_ORDER = WINDS.slice(0, players.length).map(w => w.id);
+  const SEAT_COUNT = WIND_ORDER.length;
 
   const rotateDealerIfNeeded = (winnerId, newPlayers) => {
     const winner = newPlayers.find(p => p.id === winnerId);
@@ -3074,10 +3151,10 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     // If East won — no rotation, East keeps deal
     if (winner && winner.windId === "E") return { rotatedPlayers: newPlayers, newRoundWind: roundWind };
 
-    // Rotate all seats: E→N, S→E, W→S, N→W (anti-clockwise shift)
+    // Rotate all seats one step anti-clockwise (E→S→W→N→E over the seats in play)
     const rotated = newPlayers.map(p => {
       const idx = WIND_ORDER.indexOf(p.windId);
-      const nextWind = WIND_ORDER[(idx - 1 + 4) % 4];
+      const nextWind = WIND_ORDER[(idx - 1 + SEAT_COUNT) % SEAT_COUNT];
       return { ...p, windId: nextWind };
     });
 
@@ -3092,9 +3169,9 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
     // Actually: advance round wind when the ORIGINAL East seat player gets deal back
     // For simplicity: advance round wind after 4 rotations (track via round number)
     const windIdx = WIND_ORDER.indexOf(roundWind);
-    // Advance round wind every 4 rounds (one full deal rotation)
-    const newRoundWind = round % 4 === 0
-      ? WIND_ORDER[(windIdx + 1) % 4]
+    // Advance round wind every full deal rotation (one round per seat in play)
+    const newRoundWind = round % SEAT_COUNT === 0
+      ? WIND_ORDER[(windIdx + 1) % SEAT_COUNT]
       : roundWind;
 
     return { rotatedPlayers: rotated, newRoundWind };
@@ -3302,6 +3379,22 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 </div>
                 <div style={{fontSize:12,color:"rgba(200,180,160,0.4)",marginBottom:16}}>Enter names and assign wind seats</div>
 
+                {/* Number of players */}
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Players</div>
+                  <div style={{display:"flex",gap:8}}>
+                    {[3,4].map(n=>(
+                      <button key={n} type="button" onClick={()=>setPlayerCount(n)}
+                        style={{flex:1,padding:"10px 4px",borderRadius:10,
+                          border:`1.5px solid ${players.length===n?game.color:"rgba(255,255,255,0.1)"}`,
+                          background:players.length===n?`${game.color}25`:"transparent",cursor:"pointer",
+                          color:players.length===n?game.accent:"rgba(200,180,160,0.6)",fontSize:14,fontWeight:700}}>
+                        {n} players
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {regulars.length > 0 && (
                   <div style={{marginBottom:14}}>
                     <div style={{fontSize:11,color:"rgba(200,180,160,0.45)",letterSpacing:1.2,textTransform:"uppercase",marginBottom:8}}>Saved regulars</div>
@@ -3351,7 +3444,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                       </div>
                       {/* Wind seat picker */}
                       <div style={{display:"flex",gap:5}}>
-                        {WINDS.map(w=>(
+                        {WINDS.slice(0, players.length).map(w=>(
                           <button key={w.id} onClick={()=>setPlayers(pl=>pl.map(x=>x.id===p.id?{...x,windId:w.id}:x))}
                             style={{flex:1,padding:"7px 2px",borderRadius:8,
                               border:`1.5px solid ${p.windId===w.id?p.color:"rgba(255,255,255,0.08)"}`,
@@ -3372,7 +3465,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                 <div style={{paddingTop:12,borderTop:"0.5px solid rgba(255,255,255,0.08)"}}>
                   <div style={{fontSize:11,color:"rgba(200,180,160,0.5)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Prevailing (Round) Wind</div>
                   <div style={{display:"flex",gap:6}}>
-                    {WINDS.map(w=>(
+                    {WINDS.slice(0, players.length).map(w=>(
                       <button key={w.id} onClick={()=>setRoundWind(w.id)}
                         style={{flex:1,padding:"8px 4px",borderRadius:8,
                           border:`1.5px solid ${roundWind===w.id?game.color:"rgba(255,255,255,0.1)"}`,
@@ -3700,6 +3793,7 @@ function GameApp({ isHost = false, room = null, onLeaveRoom, freshStart = false 
                     {id:"false_mj", label:"False Mahjong", sub:`−${DXB_SCORE.false_mahjong} · dealer stays`},
                     {id:"chase", label:"Chasing", sub:`−${DXB_SCORE.chasing_wind_dragon} / −${DXB_SCORE.chasing_suit}`},
                     {id:"gong", label:"Collect Gong", sub:`Concealed +${DXB_SCORE.concealed_gong_collect} each`},
+                    {id:"flower", label:"Collect Flowers", sub:`Same +${DXB_SCORE.flower_collect_same_color} / mixed +${DXB_SCORE.flower_collect_mixed} per player`},
                   ].map(a=>(
                     <button key={a.id} onClick={()=>{setTableAction(a.id);setActionDraft({});}}
                       style={{padding:"12px 12px",background:"#FFFFFF",border:"0.5px solid var(--mj-line)",
