@@ -2233,7 +2233,7 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
               {id:"same", label:`Same colour · +${DXB_SCORE.flower_collect_same_color} each`},
               {id:"mixed", label:`Mixed · +${DXB_SCORE.flower_collect_mixed} each`},
             ].map(k=>(
-              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id}))}
+              <button key={k.id} type="button" onClick={()=>setDraft(d=>({...d,flowerKind:k.id,flowerCount:k.id==="same"?Math.min(4,Number(d.flowerCount||1)):Number(d.flowerCount||1)}))}
                 style={{flex:1,padding:"10px 8px",borderRadius:10,cursor:"pointer",
                   border:`1.5px solid ${draft.flowerKind===k.id?game.color:"rgba(255,255,255,0.1)"}`,
                   background:draft.flowerKind===k.id?`${game.color}20`:"transparent",
@@ -2250,7 +2250,7 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
               style={{width:44,height:44,borderRadius:12,border:"1.5px solid rgba(255,255,255,0.12)",
                 background:"transparent",color:"#F0E8DC",fontSize:22,fontWeight:700,cursor:"pointer"}}>−</button>
             <div style={{minWidth:40,textAlign:"center",fontSize:26,fontWeight:900,color:game.accent}}>{Number(draft.flowerCount||1)}</div>
-            <button type="button" onClick={()=>setDraft(d=>({...d,flowerCount:Math.min(8,Number(d.flowerCount||1)+1)}))}
+            <button type="button" onClick={()=>setDraft(d=>({...d,flowerCount:Math.min(d.flowerKind==="same"?4:8,Number(d.flowerCount||1)+1)}))}
               style={{width:44,height:44,borderRadius:12,border:"1.5px solid rgba(255,255,255,0.12)",
                 background:"transparent",color:"#F0E8DC",fontSize:22,fontWeight:700,cursor:"pointer"}}>+</button>
             {draft.flowerKind && (
@@ -2259,6 +2259,11 @@ function TableExceptionPanel({ type, draft, setDraft, players, game, onConfirm, 
               </div>
             )}
           </div>
+          {draft.flowerKind==="same" && (
+            <div style={{fontSize:11,color:"rgba(200,180,160,0.4)",marginTop:8,lineHeight:1.5}}>
+              Same colour maxes at 4 tiles — 5 or more flowers are mixed (+{DXB_SCORE.flower_collect_mixed} each).
+            </div>
+          )}
         </>
       )}
 
